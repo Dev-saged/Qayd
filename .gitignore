@@ -10,8 +10,8 @@
 *.apk
 *.aab
 
-# مواد التوقيع لا تُرفع أبداً
-keystore.properties
+# المستودع خاص: المفاتيح محفوظة في secrets/ فقط
+/keystore.properties
 *.jks
 *.keystore
-signing/
+!secrets/**

@@ -2,8 +2,8 @@
 # - كل فرع: Artifact في صفحة التشغيل.
 # - main: كل بناء يُنشر Release مستقلاً vX.Y.Z-bN، ملاحظاته من docs/releases/vX.Y.Z.md
 #   (الإضافات / المميزات / الإصلاحات) + قائمة تغييرات هذا البناء منذ الإصدار السابق.
-# التوقيع: أسرار KEYSTORE_BASE64 و SIGNING_STORE_PASSWORD و SIGNING_KEY_ALIAS و SIGNING_KEY_PASSWORD.
-# بدونها يُوقَّع بمفتاح مؤقت (يثبت، لكن التحديث فوقه يحتاج حذف النسخة السابقة).
+# التوقيع: أسرار KEYSTORE_BASE64... إن وُجدت، وإلا secrets/signing داخل المستودع الخاص.
+# بدون أي منهما يُوقَّع بمفتاح مؤقت ولا يُنشر Release.
 name: Build Qayd APK
 
 on:
@@ -43,6 +43,15 @@ jobs:
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/qayd-release.jks"
           echo "SIGNING_STORE_FILE=$RUNNER_TEMP/qayd-release.jks" >> "$GITHUB_ENV"
 
+      - name: Detect signing
+        id: sign
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ] || [ -f secrets/signing/keystore.properties ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Tests
         run: |
           chmod +x ./gradlew
@@ -60,8 +69,8 @@ jobs:
           VERSION=$(grep '^VERSION_NAME=' gradle.properties | cut -d= -f2)
           mkdir -p dist
           cp app/build/outputs/apk/release/*.apk "dist/Qayd-v${VERSION}-b${GITHUB_RUN_NUMBER}.apk"
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::warning::No signing secrets set — APK signed with a temporary key; no Release is published."
+          if [ "${{ steps.sign.outputs.signed }}" != "true" ]; then
+            echo "::warning::No signing key — APK signed with a temporary key; no Release is published."
           fi
           ls -l dist
 
@@ -82,7 +91,7 @@ jobs:
 
       - name: Publish build release
         # لا Release بمفتاح مؤقت: لن يُثبَّت فوق النسخ الموقّعة
-        if: github.ref_name == 'main' && env.KEYSTORE_BASE64 != ''
+        if: github.ref_name == 'main' && steps.sign.outputs.signed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

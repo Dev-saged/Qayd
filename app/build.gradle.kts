@@ -7,16 +7,16 @@ plugins {
     alias(libs.plugins.google.services)
 }
 
-// CI يحقنها من GitHub Secrets؛ محلياً من keystore.properties
+// التوقيع: GitHub Secrets إن وُجدت، وإلا keystore.properties محلياً، وإلا secrets/signing في المستودع الخاص
 val keystoreProps = Properties().apply {
-    val f = rootProject.file("keystore.properties")
-    if (f.exists()) f.inputStream().use { load(it) }
+    val f = listOf("keystore.properties", "secrets/signing/keystore.properties").map(rootProject::file).firstOrNull { it.exists() }
+    f?.inputStream()?.use { load(it) }
 }
 fun secret(envName: String, propName: String): String? =
     System.getenv(envName)?.takeIf { it.isNotBlank() } ?: keystoreProps.getProperty(propName)
 
-val releaseStoreFile = secret("SIGNING_STORE_FILE", "storeFile")
-val hasReleaseSigning = releaseStoreFile != null && file(releaseStoreFile).exists()
+val releaseStoreFile = secret("SIGNING_STORE_FILE", "storeFile")?.let(rootProject::file)
+val hasReleaseSigning = releaseStoreFile?.exists() == true
 
 val ciRunNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
 val baseVersionCode = (project.property("VERSION_CODE") as String).toInt()
@@ -37,7 +37,7 @@ android {
     signingConfigs {
         if (hasReleaseSigning) {
             create("release") {
-                storeFile = file(releaseStoreFile!!)
+                storeFile = releaseStoreFile
                 storePassword = secret("SIGNING_STORE_PASSWORD", "storePassword")
                 keyAlias = secret("SIGNING_KEY_ALIAS", "keyAlias")
                 keyPassword = secret("SIGNING_KEY_PASSWORD", "keyPassword")
