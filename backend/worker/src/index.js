@@ -6,9 +6,9 @@ const SUFFIX_RE = /^[a-z0-9-]{2,30}\.[a-z]{2,10}$/;
 const USER_RE = /^[a-z0-9][a-z0-9._-]{1,31}$/;
 const MODULES = ['debts', 'ps', 'electricity', 'sms'];
 const STAFF_PERMS = {
-  viewBalances: true, addDebt: true, addPayment: true, editTx: false, deleteTx: false,
-  exportPdf: true, viewReports: false, managePs: true, setPrices: false,
-  sendSms: true, manageTemplates: false, manageElectricity: false, recordReadings: true,
+  quickSale: true, addDebt: true, addPayment: true, manageCustomers: true, deleteTx: false,
+  viewBalances: true, expenses: false, managePs: true, setPrices: false, recordReadings: true,
+  manageElectricity: false, sendSms: true, manageTemplates: false, exportPdf: true, viewReports: false,
 };
 
 class Fail extends Error {

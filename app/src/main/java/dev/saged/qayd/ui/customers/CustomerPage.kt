@@ -54,9 +54,10 @@ fun CustomerPage(
     customer: Customer,
     ledger: Ledger,
     onBack: () -> Unit,
-    onDebt: () -> Unit,
-    onPayment: () -> Unit,
+    onDebt: (() -> Unit)?,
+    onPayment: (() -> Unit)?,
     onTxTap: (Tx) -> Unit,
+    showBalance: Boolean = true,
 ) {
     val p = LocalPalette.current
     val ctx = LocalContext.current
@@ -87,7 +88,7 @@ fun CustomerPage(
                 }
             }
         }
-        item {
+        if (showBalance) item {
             val c = when { b > 0 -> p.danger; b < 0 -> p.ok; else -> p.mute }
             val shape = RoundedCornerShape(24.dp)
             Column(
@@ -104,8 +105,8 @@ fun CustomerPage(
         }
         item {
             Row(Modifier.entrance(2), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                QButton("دين", onDebt, Modifier.weight(1f))
-                QButton("دفعة", onPayment, Modifier.weight(1f), secondary = true)
+                if (onDebt != null) QButton("دين", onDebt, Modifier.weight(1f))
+                if (onPayment != null) QButton("دفعة", onPayment, Modifier.weight(1f), secondary = true)
             }
         }
         item { T("السجل", Modifier.entrance(3).padding(top = 6.dp), 14.5.sp, FontWeight.SemiBold) }

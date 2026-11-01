@@ -187,6 +187,34 @@ class QaydRepo(context: Context) {
             category = it.getString("category")?.let(ExpenseCategory::of),
             recurringId = it.getString("recurringId"), period = it.getString("period"),
             byName = it.getString("byName").orEmpty(), pending = it.metadata.hasPendingWrites(),
+            by = it.getString("by").orEmpty(), source = it.getString("source"), ref = it.getString("ref"),
+        )
+    }
+
+    fun members(shopId: String): Flow<List<Member>> = listen("shops/$shopId/members") { d ->
+        val perms = (d.get("perms") as? Map<*, *>).orEmpty()
+        Member(
+            d.id, d.getString("username").orEmpty(), d.getString("displayName").orEmpty(),
+            if (d.getString("role") == "owner") Role.Owner else Role.Staff,
+            Perm.entries.filter { perms[it.key] == true }.toSet(), d.getBoolean("active") ?: true,
+        )
+    }
+
+    fun audit(shopId: String): Flow<List<AuditEntry>> = listen("shops/$shopId/audit") {
+        AuditEntry(it.id, it.getString("action").orEmpty(), it.getString("detail").orEmpty(), it.getDouble("amount"), it.getString("byName").orEmpty(), it.millis("at"))
+    }
+
+    fun updateMember(shopId: String, m: Member, perms: Set<Perm>, active: Boolean) {
+        db.document("shops/$shopId/members/${m.uid}").update(
+            mapOf("perms" to Perm.entries.associate { it.key to (it in perms) }, "active" to active, "updatedAt" to FieldValue.serverTimestamp()),
+        )
+        log(shopId, if (active != m.active) (if (active) "تفعيل موظف" else "إيقاف موظف") else "تعديل صلاحيات", m.displayName)
+    }
+
+    fun log(shopId: String, action: String, detail: String, amount: Double? = null) {
+        val a = _account.value
+        db.collection("shops/$shopId/audit").document().set(
+            mapOf("action" to action, "detail" to detail, "amount" to amount, "by" to a?.uid, "byName" to a?.displayName, "at" to FieldValue.serverTimestamp()),
         )
     }
 
@@ -209,6 +237,7 @@ class QaydRepo(context: Context) {
     fun addTx(
         shopId: String, kind: TxKind, amount: Double, customerId: String? = null,
         category: ExpenseCategory? = null, recurringId: String? = null,
+        source: String? = null, ref: String? = null,
     ) {
         val now = System.currentTimeMillis()
         db.collection("shops/$shopId/tx").document().set(
@@ -216,12 +245,17 @@ class QaydRepo(context: Context) {
                 "kind" to kind.key, "amount" to round2(amount), "at" to Timestamp(java.util.Date(now)),
                 "customerId" to customerId, "category" to category?.key,
                 "recurringId" to recurringId, "period" to if (recurringId != null) Ledger.period(now) else null,
+                "source" to source, "ref" to ref,
             ),
         )
     }
 
-    fun deleteTx(shopId: String, id: String) {
-        db.document("shops/$shopId/tx/$id").update(mapOf("deleted" to true, "updatedAt" to FieldValue.serverTimestamp()))
+    fun deleteTx(shopId: String, tx: Tx, who: String?) {
+        val a = _account.value
+        db.document("shops/$shopId/tx/${tx.id}").update(
+            mapOf("deleted" to true, "deletedBy" to a?.uid, "deletedByName" to a?.displayName, "updatedAt" to FieldValue.serverTimestamp()),
+        )
+        log(shopId, "حذف ${tx.kind.label}", who ?: tx.byName, tx.amount)
     }
 
     fun addCustomer(shopId: String, name: String, phone: String): String {

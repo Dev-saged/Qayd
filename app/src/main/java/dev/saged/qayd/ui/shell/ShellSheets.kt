@@ -25,7 +25,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.saged.qayd.data.Access
 import dev.saged.qayd.data.Customer
+import dev.saged.qayd.data.Member
+import dev.saged.qayd.data.Perm
 import dev.saged.qayd.data.CustomerBalance
 import dev.saged.qayd.data.ExpenseCategory
 import dev.saged.qayd.data.RecurringStatus
@@ -49,10 +52,11 @@ class ShopActions(
     val debt: (String, Double) -> Unit,
     val payment: (String, Double) -> Unit,
     val expense: (ExpenseCategory, Double, String?) -> Unit,
-    val deleteTx: (String) -> Unit,
+    val deleteTx: (Tx) -> Unit,
     val addCustomer: (String, String) -> String,
     val addRecurring: (String, ExpenseCategory, Int) -> Unit,
     val deleteRecurring: (String) -> Unit,
+    val updateMember: (Member, Set<Perm>, Boolean) -> Unit = { _, _, _ -> },
 ) {
     companion object {
         val None = ShopActions({}, { _, _ -> }, { _, _ -> }, { _, _, _ -> }, {}, { _, _ -> "" }, { _, _, _ -> }, {})
@@ -68,12 +72,12 @@ sealed interface PadRequest {
 }
 
 @Composable
-fun NewActionSheet(canExpense: Boolean, onPick: (TxKind) -> Unit, onDismiss: () -> Unit) {
+fun NewActionSheet(access: Access, onPick: (TxKind) -> Unit, onDismiss: () -> Unit) {
     QSheet("عملية جديدة", onDismiss) {
-        ActionRow(QIcons.Cart, "بيع سريع", "مبلغ فقط، يُسجل فوراً كبيع للمحل") { onPick(TxKind.Sale) }
-        ActionRow(QIcons.Up, "دين على زبون", "اختر الزبون ثم المبلغ") { onPick(TxKind.Debt) }
-        ActionRow(QIcons.Down, "دفعة من زبون", "تُخصم من رصيده، والزيادة تبقى له") { onPick(TxKind.Payment) }
-        if (canExpense) ActionRow(QIcons.Wallet, "مصروف", "بضاعة، إنترنت، كهرباء، إيجار…") { onPick(TxKind.Expense) }
+        if (access.can(Perm.QuickSale)) ActionRow(QIcons.Cart, "بيع سريع", "مبلغ فقط، يُسجل فوراً كبيع للمحل") { onPick(TxKind.Sale) }
+        if (access.can(Perm.AddDebt)) ActionRow(QIcons.Up, "دين على زبون", "اختر الزبون ثم المبلغ") { onPick(TxKind.Debt) }
+        if (access.can(Perm.AddPayment)) ActionRow(QIcons.Down, "دفعة من زبون", "تُخصم من رصيده، والزيادة تبقى له") { onPick(TxKind.Payment) }
+        if (access.can(Perm.Expenses)) ActionRow(QIcons.Wallet, "مصروف", "بضاعة، إنترنت، كهرباء، إيجار…") { onPick(TxKind.Expense) }
     }
 }
 

@@ -127,7 +127,7 @@ class ShellSnapshotTest {
         Box(Modifier.fillMaxSize().background(LocalPalette.current.bg)) { content() }
     }
 
-    @Test fun customers() = snap("customers", true, page { CustomersScreen(PaddingValues(top = 24.dp), ledger, {}, {}) })
+    @Test fun customers() = snap("customers", true, page { CustomersScreen(PaddingValues(top = 24.dp), ledger, true, {}, {}) })
 
     @Test fun customer() = snap("customer", true, page { CustomerPage(PaddingValues(top = 24.dp), cs[0], ledger, {}, {}, {}, {}) })
 
@@ -174,7 +174,7 @@ class ShellSnapshotTest {
 
     @Test fun more() = snap("more", true) {
         Box(Modifier.fillMaxSize().background(LocalPalette.current.bg)) {
-            MoreScreen(PaddingValues(top = 24.dp), shop, owner, SyncState.Pending, Op(), {}, { _, _, _ -> }, {}, {}, {})
+            MoreScreen(PaddingValues(top = 24.dp), shop, owner, SyncState.Pending, Op(), {}, { _, _, _ -> }, {}, {})
         }
     }
 

@@ -43,6 +43,9 @@ data class Tx(
     val period: String? = null,
     val byName: String = "",
     val pending: Boolean = false,
+    val by: String = "",
+    val source: String? = null,
+    val ref: String? = null,
 )
 
 @Immutable
@@ -78,6 +81,7 @@ data class Ledger(
     val recurring: List<RecurringStatus>,
     val debtTrend: List<Float>,
     private val txByCustomer: Map<String, List<Tx>>,
+    val allTx: List<Tx> = emptyList(),
 ) {
     fun history(customerId: String): List<Tx> = txByCustomer[customerId].orEmpty()
     fun balanceOf(customerId: String): CustomerBalance? = customers.firstOrNull { it.customer.id == customerId }
@@ -155,6 +159,7 @@ data class Ledger(
                 recurring = status,
                 debtTrend = if (debtTx.isEmpty()) emptyList() else trend,
                 txByCustomer = byCustomer,
+                allTx = sorted,
             )
         }
     }

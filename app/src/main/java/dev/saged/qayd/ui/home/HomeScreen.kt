@@ -45,7 +45,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.saged.qayd.config.BrandConfig
+import dev.saged.qayd.data.Access
 import dev.saged.qayd.data.Account
+import dev.saged.qayd.data.Perm
 import dev.saged.qayd.data.Ledger
 import dev.saged.qayd.data.Tx
 import dev.saged.qayd.data.Module
@@ -76,7 +78,8 @@ fun HomeScreen(
     sync: SyncState,
     ledger: Ledger,
     initialSlots: List<PsSlot>,
-    onQuickSale: () -> Unit,
+    access: Access,
+    onQuickSale: (() -> Unit)?,
     onTxTap: (Tx) -> Unit,
 ) {
     val haptic = LocalHapticFeedback.current
@@ -93,8 +96,8 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Header(shop, account, sync, Modifier.entrance(0))
-        Hero(ledger, hidden, onToggle = { hidden = !hidden }, modifier = Modifier.entrance(1))
-        QuickSale(ledger, Modifier.entrance(2), onQuickSale, onTxTap)
+        if (access.can(Perm.ViewBalances)) Hero(ledger, hidden, onToggle = { hidden = !hidden }, modifier = Modifier.entrance(1))
+        if (onQuickSale != null) QuickSale(ledger, Modifier.entrance(2), onQuickSale, onTxTap)
 
         if (Module.Ps in shop.modules && slots.isNotEmpty()) {
             val running = slots.count { it.startedAt != null }

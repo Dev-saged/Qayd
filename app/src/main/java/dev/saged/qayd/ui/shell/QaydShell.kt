@@ -1,7 +1,13 @@
 package dev.saged.qayd.ui.shell
 
 import androidx.activity.compose.BackHandler
+import dev.saged.qayd.data.Access
 import dev.saged.qayd.data.AmountInput
+import dev.saged.qayd.data.AuditEntry
+import dev.saged.qayd.data.Member
+import dev.saged.qayd.data.Perm
+import dev.saged.qayd.ui.team.AuditPage
+import dev.saged.qayd.ui.team.TeamPage
 import dev.saged.qayd.data.Customer
 import dev.saged.qayd.data.ExpenseCategory
 import dev.saged.qayd.data.Ledger
@@ -85,7 +91,12 @@ enum class Tab(val label: String, val icon: ImageVector) {
 private sealed interface Page {
     data class CustomerDetail(val id: String) : Page
     data object Expenses : Page
+    data object Team : Page
+    data object Audit : Page
 }
+
+/** تنقل صفحات "المزيد". */
+class MoreNav(val expenses: (() -> Unit)?, val team: (() -> Unit)?, val audit: (() -> Unit)?)
 
 @Composable
 fun QaydShell(
@@ -95,7 +106,10 @@ fun QaydShell(
     ledger: Ledger,
     slots: List<PsSlot>,
     actions: ShopActions,
-    more: @Composable (PaddingValues, () -> Unit) -> Unit,
+    access: Access = Access.Full,
+    members: List<Member> = emptyList(),
+    audit: List<AuditEntry> = emptyList(),
+    more: @Composable (PaddingValues, MoreNav) -> Unit,
 ) {
     val p = LocalPalette.current
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
@@ -106,6 +120,7 @@ fun QaydShell(
     var addingCustomer by rememberSaveable { mutableStateOf(false) }
     var confirm by remember { mutableStateOf<Tx?>(null) }
     val owner = account.role == dev.saged.qayd.data.Role.Owner
+    val tap: (Tx) -> Unit = { if (access.can(Perm.DeleteTx)) confirm = it }
     val top = WindowInsets.statusBars.asPaddingValues()
     val pad0 = PaddingValues(top = top.calculateTopPadding())
 
@@ -127,22 +142,39 @@ fun QaydShell(
                         if (c != null) {
                             CustomerPage(
                                 pad0, c, ledger, onBack = { page = null },
-                                onDebt = { pad = PadRequest.Debt(c) }, onPayment = { pad = PadRequest.Payment(c) },
-                                onTxTap = { confirm = it },
+                                onDebt = { pad = PadRequest.Debt(c) }.takeIf { access.can(Perm.AddDebt) },
+                                onPayment = { pad = PadRequest.Payment(c) }.takeIf { access.can(Perm.AddPayment) },
+                                showBalance = access.can(Perm.ViewBalances),
+                                onTxTap = tap,
                             )
                         }
                     }
+                    Page.Team -> TeamPage(pad0, members, ledger, onBack = { page = null }, onAdd = { tab = Tab.More; page = null }, onSave = actions.updateMember)
+                    Page.Audit -> AuditPage(pad0, audit, onBack = { page = null })
                     Page.Expenses -> ExpensesPage(
                         pad0, ledger, onBack = { page = null }, onAdd = { pad = PadRequest.Expense() },
                         onPay = { pad = PadRequest.Expense(it) },
                         onAddRecurring = actions.addRecurring, onDeleteRecurring = actions.deleteRecurring,
-                        onTxTap = { confirm = it },
+                        onTxTap = tap,
                     )
                     null -> when (t) {
-                        Tab.Home -> HomeScreen(pad0, shop, account, sync, ledger, slots, onQuickSale = { pad = PadRequest.Sale }, onTxTap = { confirm = it })
-                        Tab.Customers -> CustomersScreen(pad0, ledger, onOpen = { page = Page.CustomerDetail(it.id) }, onAdd = { addingCustomer = true })
+                        Tab.Home -> HomeScreen(
+                            pad0, shop, account, sync, ledger, slots, access,
+                            onQuickSale = { pad = PadRequest.Sale }.takeIf { access.can(Perm.QuickSale) }, onTxTap = tap,
+                        )
+                        Tab.Customers -> CustomersScreen(
+                            pad0, ledger, access.can(Perm.ViewBalances), onOpen = { page = Page.CustomerDetail(it.id) },
+                            onAdd = { addingCustomer = true }.takeIf { access.can(Perm.ManageCustomers) },
+                        )
                         Tab.Messages -> EmptyTab(pad0, QIcons.Msg, "طابور الرسائل فارغ", "كل رسالة تُرسل لمدين أو مشترك تظهر هنا بحالتها: بالانتظار، أُرسلت، وصلت.")
-                        Tab.More -> more(pad0) { page = Page.Expenses }
+                        Tab.More -> more(
+                            pad0,
+                            MoreNav(
+                                expenses = { page = Page.Expenses }.takeIf { access.can(Perm.Expenses) },
+                                team = { page = Page.Team }.takeIf { owner },
+                                audit = { page = Page.Audit }.takeIf { owner },
+                            ),
+                        )
                     }
                 }
             }
@@ -152,7 +184,7 @@ fun QaydShell(
     }
 
     if (newAction) {
-        NewActionSheet(owner, onPick = { k ->
+        NewActionSheet(access, onPick = { k ->
             newAction = false
             when (k) {
                 TxKind.Sale -> pad = PadRequest.Sale
@@ -207,7 +239,7 @@ fun QaydShell(
     }
 
     confirm?.let { t ->
-        ConfirmDeleteSheet(t, t.customerId?.let { ledger.balanceOf(it)?.customer?.name }, onDelete = { actions.deleteTx(t.id) }) { confirm = null }
+        ConfirmDeleteSheet(t, t.customerId?.let { ledger.balanceOf(it)?.customer?.name }, onDelete = { actions.deleteTx(t) }) { confirm = null }
     }
 }
 

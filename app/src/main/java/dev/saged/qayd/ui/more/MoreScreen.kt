@@ -39,6 +39,7 @@ import dev.saged.qayd.data.SyncState
 import dev.saged.qayd.data.Validate
 import dev.saged.qayd.ui.Op
 import dev.saged.qayd.ui.components.ActionRow
+import dev.saged.qayd.ui.shell.MoreNav
 import dev.saged.qayd.ui.components.QButton
 import dev.saged.qayd.ui.components.QField
 import dev.saged.qayd.ui.components.QNotice
@@ -62,7 +63,7 @@ fun MoreScreen(
     onAddStaff: (String, String, String) -> Unit,
     onClearOp: () -> Unit,
     onSignOut: () -> Unit,
-    onExpenses: (() -> Unit)? = null,
+    nav: MoreNav = MoreNav(null, null, null),
 ) {
     val p = LocalPalette.current
     var sheet by rememberSaveable { mutableStateOf<MoreSheet?>(null) }
@@ -93,7 +94,9 @@ fun MoreScreen(
         }
 
         Column(Modifier.entrance(2).fillMaxWidth().clip(shape).background(p.surface).border(1.dp, p.line, shape).padding(6.dp)) {
-            if (onExpenses != null) ActionRow(QIcons.Wallet, "المصروفات", "بضاعة، إنترنت، كهرباء، إيجار، ودفعات شهرية ثابتة", onClick = onExpenses)
+            nav.expenses?.let { ActionRow(QIcons.Wallet, "المصروفات", "بضاعة، إنترنت، كهرباء، إيجار، ودفعات شهرية ثابتة", onClick = it) }
+            nav.team?.let { ActionRow(QIcons.Users, "الفريق والصلاحيات", "وردية اليوم لكل عضو، وصلاحياته، وإيقافه", onClick = it) }
+            nav.audit?.let { ActionRow(QIcons.Receipt, "سجل التدقيق", "كل حذف أو تغيير صلاحيات: من ومتى", onClick = it) }
             if (owner) {
                 ActionRow(QIcons.Edit, "اسم المحل", shop.name) { onClearOp(); sheet = MoreSheet.Rename }
                 ActionRow(QIcons.UserPlus, "إضافة موظف", "حساب دخول جديد على نطاق ⁦@${shop.suffix}⁩") { onClearOp(); sheet = MoreSheet.Staff }

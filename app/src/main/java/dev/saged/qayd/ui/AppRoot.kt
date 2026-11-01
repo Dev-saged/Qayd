@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.saged.qayd.config.BrandConfig
+import dev.saged.qayd.data.Access
 import dev.saged.qayd.data.Account
 import dev.saged.qayd.data.Ledger
 import dev.saged.qayd.data.TxKind
@@ -89,15 +90,22 @@ private fun ShopRoot(vm: AppViewModel, account: Account) {
             val op by vm.adminOp.collectAsStateWithLifecycle()
             val slots = remember(shop.psScreens) { idleSlots(shop.psScreens) }
             val ledger = rememberLedger(vm, shop.id)
-            val actions = remember(shop.id) { shopActions(vm, shop.id) }
-            QaydShell(shop, account, current.second, ledger, slots, actions) { pad, openExpenses ->
+            val actions = remember(shop.id, ledger) { shopActions(vm, shop.id, ledger) }
+            val members by remember(shop.id) { vm.repo.members(shop.id) }.collectAsStateWithLifecycle(emptyList())
+            val audit by remember(shop.id, account.role) {
+                if (account.role == Role.Owner) vm.repo.audit(shop.id) else kotlinx.coroutines.flow.flowOf(emptyList())
+            }.collectAsStateWithLifecycle(emptyList())
+            val me = members.firstOrNull { it.uid == account.uid }
+            val access = if (account.role == Role.Owner) Access.Full else Access(Role.Staff, me?.perms.orEmpty(), me?.active ?: true)
+            if (!access.active) return Blocked("حسابك موقوف من صاحب المحل", vm::signOut)
+            QaydShell(shop, account, current.second, ledger, slots, actions, access, members, audit) { pad, nav ->
                 MoreScreen(
                     padding = pad, shop = shop, account = account, sync = current.second, op = op,
                     onRename = { vm.repo.renameShop(shop.id, it) },
                     onAddStaff = vm::createStaff,
                     onClearOp = vm::clearOp,
                     onSignOut = vm::signOut,
-                    onExpenses = openExpenses.takeIf { account.role == Role.Owner },
+                    nav = nav,
                 )
             }
         }
@@ -116,16 +124,17 @@ private fun rememberLedger(vm: AppViewModel, shopId: String): Ledger {
     }
 }
 
-private fun shopActions(vm: AppViewModel, shopId: String) = vm.repo.let { r ->
+private fun shopActions(vm: AppViewModel, shopId: String, ledger: Ledger) = vm.repo.let { r ->
     ShopActions(
         sale = { r.addTx(shopId, TxKind.Sale, it) },
         debt = { c, v -> r.addTx(shopId, TxKind.Debt, v, customerId = c) },
         payment = { c, v -> r.addTx(shopId, TxKind.Payment, v, customerId = c) },
         expense = { cat, v, rec -> r.addTx(shopId, TxKind.Expense, v, category = cat, recurringId = rec) },
-        deleteTx = { r.deleteTx(shopId, it) },
+        deleteTx = { t -> r.deleteTx(shopId, t, t.customerId?.let { id -> ledger.balanceOf(id)?.customer?.name }) },
         addCustomer = { n, ph -> r.addCustomer(shopId, n, ph) },
         addRecurring = { t, c, d -> r.addRecurring(shopId, t, c, d) },
         deleteRecurring = { r.deleteRecurring(shopId, it) },
+        updateMember = { m, perms, active -> r.updateMember(shopId, m, perms, active) },
     )
 }
 

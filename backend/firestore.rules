@@ -1,6 +1,7 @@
 rules_version = '2';
 
 // عزل كل محل ببياناته عبر claims (shopId, role, super_admin) التي يضعها Worker qayd-admin فقط.
+// صلاحيات الموظف من members/{uid}.perms، والمميزات المدفوعة من config/features و shops.paid.
 service cloud.firestore {
   match /databases/{db}/documents {
 
@@ -8,12 +9,34 @@ service cloud.firestore {
     function isSuper() { return signedIn() && request.auth.token.get('super_admin', false) == true; }
     function inShop(shopId) { return signedIn() && request.auth.token.get('shopId', '') == shopId; }
     function isOwner(shopId) { return inShop(shopId) && request.auth.token.get('role', '') == 'owner'; }
+    function shop(shopId) { return get(/databases/$(db)/documents/shops/$(shopId)).data; }
     function shopActive(shopId) {
-      let s = get(/databases/$(db)/documents/shops/$(shopId)).data;
+      let s = shop(shopId);
       return s.active == true && (s.get('licenseUntil', null) == null || s.licenseUntil > request.time);
     }
-    function onlyChanges(keys) {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    function me(shopId) { return get(/databases/$(db)/documents/shops/$(shopId)/members/$(request.auth.uid)).data; }
+    function member(shopId) { return isSuper() || (inShop(shopId) && shopActive(shopId) && (isOwner(shopId) || me(shopId).active == true)); }
+    function can(shopId, p) {
+      return isSuper() || (inShop(shopId) && shopActive(shopId)
+        && (isOwner(shopId) || (me(shopId).active == true && me(shopId).perms.get(p, false) == true)));
+    }
+    function featureOn(shopId, f) {
+      let s = shop(shopId);
+      let cfg = get(/databases/$(db)/documents/config/features).data;
+      return s.get('modules', {}).get(f, false) == true
+        && (cfg.get(f, 'free') == 'free' || s.get('paid', {}).get(f, false) == true);
+    }
+    function onlyChanges(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
+    function byMe() { return request.resource.data.get('by', '') == request.auth.uid || isSuper(); }
+
+    match /config/{doc} {
+      allow read: if signedIn();
+      allow write: if isSuper();
+    }
+
+    match /suffixes/{suffix} {
+      allow read: if isSuper();
+      allow write: if false;
     }
 
     match /shops/{shopId} {
@@ -29,17 +52,61 @@ service cloud.firestore {
               && onlyChanges(['displayName', 'perms', 'active', 'updatedAt']));
       }
 
-      // بيانات الوحدات (زبائن، حركات، شاشات، كهرباء، رسائل): أعضاء المحل فقط وما دام المحل فعّالاً
-      match /{col}/{docId=**} {
-        allow read, write: if col != 'members'
-          && (isSuper() || (inShop(shopId) && shopActive(shopId)));
+      match /customers/{id} {
+        allow read: if member(shopId);
+        allow create, update: if byMe() && (can(shopId, 'manageCustomers') || can(shopId, 'addDebt') || can(shopId, 'manageElectricity'));
       }
-    }
 
-    // فهرس تفرّد نطاقات المحلات (يكتبه Worker فقط)
-    match /suffixes/{suffix} {
-      allow read: if isSuper();
-      allow write: if false;
+      match /tx/{id} {
+        allow read: if member(shopId);
+        allow create: if byMe() && (
+          (request.resource.data.kind == 'sale' && (can(shopId, 'quickSale') || can(shopId, 'managePs')))
+          || (request.resource.data.kind == 'debt' && (can(shopId, 'addDebt') || can(shopId, 'recordReadings') || can(shopId, 'managePs')))
+          || (request.resource.data.kind == 'payment' && can(shopId, 'addPayment'))
+          || (request.resource.data.kind == 'expense' && can(shopId, 'expenses')));
+        allow update: if can(shopId, 'deleteTx') && onlyChanges(['deleted', 'deletedBy', 'deletedByName', 'updatedAt']);
+      }
+
+      match /recurring/{id} {
+        allow read: if member(shopId);
+        allow write: if can(shopId, 'expenses');
+      }
+
+      match /audit/{id} {
+        allow read: if isSuper() || isOwner(shopId);
+        allow create: if member(shopId) && byMe();
+      }
+
+      match /settings/{doc} {
+        allow read: if member(shopId);
+        allow write: if can(shopId, 'setPrices');
+      }
+
+      match /ps/{screen} {
+        allow read: if member(shopId);
+        allow write: if can(shopId, 'managePs') && featureOn(shopId, 'ps');
+      }
+
+      match /readings/{id} {
+        allow read: if member(shopId);
+        allow create: if byMe() && can(shopId, 'recordReadings') && featureOn(shopId, 'electricity');
+        allow update: if can(shopId, 'manageElectricity');
+      }
+
+      match /templates/{id} {
+        allow read: if member(shopId);
+        allow write: if can(shopId, 'manageTemplates');
+      }
+
+      match /smsQueue/{id} {
+        allow read: if member(shopId);
+        allow create: if byMe() && can(shopId, 'sendSms') && featureOn(shopId, 'sms');
+        allow update: if member(shopId) && onlyChanges(['status', 'error', 'sentAt', 'deliveredAt', 'attempts', 'gateway', 'updatedAt']);
+      }
+
+      match /gateway/{doc} {
+        allow read, write: if member(shopId);
+      }
     }
   }
 }

@@ -50,7 +50,7 @@ import dev.saged.qayd.ui.util.norm
 private enum class Sort(val label: String) { Debt("الأكثر ديناً"), Recent("الأحدث"), Alpha("أبجدي"), Late("متأخرون") }
 
 @Composable
-fun CustomersScreen(padding: PaddingValues, ledger: Ledger, onOpen: (Customer) -> Unit, onAdd: () -> Unit) {
+fun CustomersScreen(padding: PaddingValues, ledger: Ledger, showBalances: Boolean, onOpen: (Customer) -> Unit, onAdd: (() -> Unit)?) {
     val p = LocalPalette.current
     var q by rememberSaveable { mutableStateOf("") }
     var sort by rememberSaveable { mutableStateOf(Sort.Debt) }
@@ -74,9 +74,9 @@ fun CustomersScreen(padding: PaddingValues, ledger: Ledger, onOpen: (Customer) -
             Row(Modifier.entrance(0), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     T("الزبائن", size = 22.sp, weight = FontWeight.Bold)
-                    T("${ledger.customers.size} زبون · عليهم ${cur(ledger.totalDebt)}", size = 12.5.sp, color = p.mute)
+                    T(if (showBalances) "${ledger.customers.size} زبون · عليهم ${cur(ledger.totalDebt)}" else "${ledger.customers.size} زبون", size = 12.5.sp, color = p.mute)
                 }
-                IconTile(QIcons.UserPlus, "زبون جديد", onAdd)
+                if (onAdd != null) IconTile(QIcons.UserPlus, "زبون جديد", onAdd)
             }
         }
         item { QField(q, { q = it }, "بحث", hint = "الاسم أو رقم الجوال", modifier = Modifier.entrance(1)) }
@@ -104,12 +104,12 @@ fun CustomersScreen(padding: PaddingValues, ledger: Ledger, onOpen: (Customer) -
                 }
             }
         }
-        items(list, key = { it.customer.id }) { c -> CustomerRow(c, onOpen) }
+        items(list, key = { it.customer.id }) { c -> CustomerRow(c, showBalances, onOpen) }
     }
 }
 
 @Composable
-private fun CustomerRow(c: CustomerBalance, onOpen: (Customer) -> Unit) {
+private fun CustomerRow(c: CustomerBalance, showBalance: Boolean, onOpen: (Customer) -> Unit) {
     val p = LocalPalette.current
     val shape = RoundedCornerShape(18.dp)
     Row(
@@ -127,7 +127,9 @@ private fun CustomerRow(c: CustomerBalance, onOpen: (Customer) -> Unit) {
                 size = 12.sp, color = if (c.late) p.warn else p.mute,
             )
         }
-        val (txt, col) = balanceText(c.balance, p)
-        T(txt, size = 14.sp, weight = FontWeight.SemiBold, color = col)
+        if (showBalance) {
+            val (txt, col) = balanceText(c.balance, p)
+            T(txt, size = 14.sp, weight = FontWeight.SemiBold, color = col)
+        }
     }
 }
