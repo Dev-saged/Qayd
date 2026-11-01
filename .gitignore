@@ -1,0 +1,18 @@
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.DS_Store
+/build/
+/app/build/
+/captures/
+.kotlin/
+*.apk
+*.aab
+
+# مواد التوقيع لا تُرفع أبداً
+keystore.properties
+*.jks
+*.keystore
+signing/
+google-services.json

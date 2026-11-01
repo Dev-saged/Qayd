@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="qayd_night">#0E1220</color>
+
+    <style name="Theme.Qayd" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/qayd_night</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+
+    <style name="Theme.Qayd.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/qayd_night</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <item name="postSplashScreenTheme">@style/Theme.Qayd</item>
+    </style>
+</resources>

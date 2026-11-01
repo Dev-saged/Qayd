@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- علامة ق: رأس دائري، ساق، وكأس سفلية — مأخوذة من brand/qayd-mark.svg -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+    <group
+        android:scaleX="0.62"
+        android:scaleY="0.62"
+        android:pivotX="512"
+        android:pivotY="512"
+        android:translateX="3"
+        android:translateY="-1">
+        <path
+            android:pathData="M754,400 a112,112 0 1,1 -224,0 a112,112 0 1,1 224,0 M754,400 V600 A246,246 0 0,1 262,600"
+            android:strokeWidth="76"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round">
+            <aapt:attr name="android:strokeColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="300" android:startY="140"
+                    android:endX="760" android:endY="890"
+                    android:startColor="#F6D98E"
+                    android:centerColor="#E2B656"
+                    android:endColor="#A9782A" />
+            </aapt:attr>
+        </path>
+        <path android:pathData="M624,186 a42,42 0 1,1 -84,0 a42,42 0 1,1 84,0 M744,186 a42,42 0 1,1 -84,0 a42,42 0 1,1 84,0">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="540" android:startY="144"
+                    android:endX="744" android:endY="228"
+                    android:startColor="#F6D98E"
+                    android:endColor="#C99A3E" />
+            </aapt:attr>
+        </path>
+    </group>
+</vector>

@@ -1,0 +1,339 @@
+package dev.saged.qayd.ui.home
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import dev.saged.qayd.config.BrandConfig
+import dev.saged.qayd.ui.components.QIcon
+import dev.saged.qayd.ui.components.Ring
+import dev.saged.qayd.ui.components.Sparkline
+import dev.saged.qayd.ui.components.T
+import dev.saged.qayd.ui.components.entrance
+import dev.saged.qayd.ui.components.pressScale
+import dev.saged.qayd.ui.components.rememberNow
+import dev.saged.qayd.ui.components.rememberPulse
+import dev.saged.qayd.ui.icons.QIcons
+import dev.saged.qayd.ui.theme.LocalPalette
+import java.util.Locale
+
+/** عزل LTR حتى لا تنقلب الإشارة والعملة داخل سطر عربي. */
+private fun ltr(s: String) = "⁦$s⁩"
+private fun money(v: Long) = String.format(Locale.US, "%,d", v)
+private fun money(v: Double) = if (v % 1.0 == 0.0) money(v.toLong()) else String.format(Locale.US, "%,.1f", v)
+
+@Composable
+fun HomeScreen(padding: PaddingValues, summary: HomeSummary = SampleHome.summary) {
+    val haptic = LocalHapticFeedback.current
+    val now by rememberNow()
+    val slots = remember { mutableStateListOf(*SampleHome.slots(System.currentTimeMillis()).toTypedArray()) }
+    var hidden by rememberSaveable { mutableStateOf(false) }
+
+    Column(
+        Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(padding)
+            .padding(horizontal = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        Header(summary, Modifier.entrance(0))
+        Hero(summary, hidden, onToggle = { hidden = !hidden }, modifier = Modifier.entrance(1))
+
+        val running = slots.count { it.startedAt != null }
+        SectionTitle("الشاشات", "$running من ${slots.size} قيد التشغيل", Modifier.entrance(2))
+        Row(Modifier.entrance(3), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            slots.forEachIndexed { i, s ->
+                PsTile(
+                    slot = s,
+                    now = now,
+                    modifier = Modifier.weight(1f),
+                    onTap = {
+                        if (s.startedAt == null) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            slots[i] = s.copy(startedAt = System.currentTimeMillis())
+                        }
+                    },
+                    onLong = {
+                        if (s.startedAt != null) {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            slots[i] = s.copy(startedAt = null)
+                        }
+                    },
+                )
+            }
+        }
+
+        Row(Modifier.entrance(4), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            MiniStat("متأخرون", summary.late.toString(), Modifier.weight(1f))
+            MiniStat("قراءات معلّقة", summary.pendingReadings.toString(), Modifier.weight(1f))
+            GatewayStat(summary.gatewayOnline, Modifier.weight(1f))
+        }
+
+        SectionTitle("آخر الحركات", "الكل", Modifier.entrance(5))
+        Column(Modifier.entrance(6)) { summary.recent.forEach { ActivityRow(it) } }
+        Spacer(Modifier.height(96.dp))
+    }
+}
+
+@Composable
+private fun Header(s: HomeSummary, modifier: Modifier) {
+    val p = LocalPalette.current
+    Row(modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(Brush.linearGradient(listOf(p.pri, lerp(p.pri, Color.Black, .45f)))),
+            contentAlignment = Alignment.Center,
+        ) { T(s.shopName.take(1), size = 18.sp, weight = FontWeight.Bold, color = p.onPri) }
+        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+            T(s.shopName, size = 16.sp, weight = FontWeight.SemiBold)
+            T(s.user, size = 12.sp, color = p.mute)
+        }
+        Box(
+            Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(14.dp))
+                .background(p.surface)
+                .border(1.dp, p.line, RoundedCornerShape(14.dp))
+                .clickable(role = Role.Button, onClickLabel = "الإشعارات") {},
+            contentAlignment = Alignment.Center,
+        ) {
+            QIcon(QIcons.Bell, p.ink, Modifier.size(22.dp), "الإشعارات")
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = 10.dp, end = 11.dp)
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(p.danger),
+            )
+        }
+    }
+}
+
+@Composable
+private fun Hero(s: HomeSummary, hidden: Boolean, onToggle: () -> Unit, modifier: Modifier) {
+    val p = LocalPalette.current
+    val shape = RoundedCornerShape(24.dp)
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(Brush.linearGradient(listOf(p.surface, p.surface2)))
+            .border(1.dp, p.line, shape)
+            .drawWithContent {
+                drawContent()
+                drawLine(
+                    Brush.horizontalGradient(listOf(Color.Transparent, p.pri, Color.Transparent)),
+                    Offset(0f, 1f), Offset(size.width, 1f), 2.dp.toPx(),
+                )
+            }
+            .padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            T("إجمالي الديون المستحقة", Modifier.weight(1f), 13.sp, color = p.mute)
+            Box(
+                Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable(role = Role.Button, onClick = onToggle),
+                contentAlignment = Alignment.Center,
+            ) {
+                QIcon(if (hidden) QIcons.EyeOff else QIcons.Eye, p.mute, Modifier.size(22.dp), if (hidden) "إظهار المبلغ" else "إخفاء المبلغ")
+            }
+        }
+        Row(verticalAlignment = Alignment.Bottom) {
+            T(if (hidden) "••••••" else money(s.totalDebt), size = 40.sp, weight = FontWeight.SemiBold)
+            Spacer(Modifier.width(8.dp))
+            T(BrandConfig.CURRENCY, Modifier.padding(bottom = 8.dp), 18.sp, FontWeight.Medium, p.pri)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            QIcon(QIcons.Down, p.ok, Modifier.size(16.dp))
+            Spacer(Modifier.width(6.dp))
+            T("انخفض ${ltr(money(s.collectedToday) + " " + BrandConfig.CURRENCY)} بتحصيل اليوم", size = 12.5.sp, color = p.ok)
+        }
+        Sparkline(s.trend, p.pri, Modifier.fillMaxWidth().height(46.dp).padding(top = 8.dp))
+    }
+}
+
+@Composable
+private fun SectionTitle(title: String, aside: String, modifier: Modifier) {
+    val p = LocalPalette.current
+    Row(modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+        T(title, Modifier.weight(1f), 14.5.sp, FontWeight.SemiBold)
+        T(aside, size = 13.sp, color = p.mute)
+    }
+}
+
+@Composable
+private fun PsTile(slot: PsSlot, now: Long, modifier: Modifier, onTap: () -> Unit, onLong: () -> Unit) {
+    val p = LocalPalette.current
+    val start = slot.startedAt
+    val elapsed = if (start != null) (now - start).coerceAtLeast(0L) else 0L
+    val booked = slot.bookedMinutes * 60_000L
+    val left = booked - elapsed
+    val over = start != null && left <= 0L
+    val warn = start != null && !over && left <= BrandConfig.PS_WARN_MINUTES * 60_000L
+    val accent = when {
+        over -> p.danger
+        warn -> p.warn
+        else -> p.pri
+    }
+    val shape = RoundedCornerShape(20.dp)
+    val source = remember { MutableInteractionSource() }
+    val pulse = if (warn || over) rememberPulse() else 1f
+
+    Column(
+        modifier
+            .pressScale(source)
+            .heightIn(min = 118.dp)
+            .clip(shape)
+            .background(p.surface)
+            .border(1.dp, if (start != null && (warn || over)) accent.copy(alpha = .65f) else p.line, shape)
+            .combinedClickable(
+                interactionSource = source,
+                indication = null,
+                role = Role.Button,
+                onClickLabel = if (start == null) "ابدأ جلسة" else null,
+                onLongClickLabel = if (start != null) "أنهِ الجلسة" else null,
+                onClick = onTap,
+                onLongClick = onLong,
+            )
+            .padding(horizontal = 8.dp, vertical = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        T(slot.number.toString(), Modifier.align(Alignment.Start).padding(start = 2.dp), 11.sp, color = p.mute)
+        if (start == null) {
+            QIcon(QIcons.Pad, p.mute, Modifier.size(30.dp))
+            T("متاحة", size = 15.sp, weight = FontWeight.SemiBold)
+            T("ابدأ جلسة", size = 11.sp, color = p.mute)
+        } else {
+            Ring((elapsed.toFloat() / booked).coerceIn(0f, 1f), accent, p.line, Modifier.size(42.dp))
+            val sec = elapsed / 1000
+            T(String.format(Locale.US, "%02d:%02d:%02d", sec / 3600, sec / 60 % 60, sec % 60), size = 15.sp, weight = FontWeight.SemiBold)
+            T(
+                when {
+                    over -> "انتهى الوقت"
+                    else -> "باقي ${(left + 59_999) / 60_000} د"
+                },
+                Modifier.then(if (warn || over) Modifier.alphaPulse(pulse) else Modifier),
+                11.sp,
+                color = if (warn || over) accent else p.mute,
+            )
+        }
+    }
+}
+
+private fun Modifier.alphaPulse(a: Float) = graphicsLayer { alpha = a }
+
+@Composable
+private fun MiniStat(label: String, value: String, modifier: Modifier) {
+    val p = LocalPalette.current
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        modifier.clip(shape).background(p.surface).border(1.dp, p.line, shape).padding(horizontal = 12.dp, vertical = 11.dp),
+    ) {
+        T(label, size = 11.5.sp, color = p.mute)
+        T(value, size = 19.sp, weight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun GatewayStat(online: Boolean, modifier: Modifier) {
+    val p = LocalPalette.current
+    val shape = RoundedCornerShape(16.dp)
+    val c = if (online) p.ok else p.danger
+    val pulse = rememberPulse()
+    Column(
+        modifier.clip(shape).background(p.surface).border(1.dp, p.line, shape).padding(horizontal = 12.dp, vertical = 11.dp),
+    ) {
+        T("جوال الإرسال", size = 11.5.sp, color = p.mute)
+        Row(Modifier.height(27.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(8.dp).clip(CircleShape).background(c.copy(alpha = if (online) pulse else 1f)))
+            Spacer(Modifier.width(6.dp))
+            T(if (online) "متصل" else "متوقف", size = 13.sp, weight = FontWeight.SemiBold, color = c)
+        }
+    }
+}
+
+@Composable
+private fun ActivityRow(a: Activity) {
+    val p = LocalPalette.current
+    val positive = a.kind == ActivityKind.Payment
+    val c = if (positive) p.ok else p.danger
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .drawWithContent {
+                drawContent()
+                drawLine(p.line, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx())
+            }
+            .padding(vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(p.surface2),
+            contentAlignment = Alignment.Center,
+        ) {
+            QIcon(
+                when (a.kind) {
+                    ActivityKind.Payment -> QIcons.Down
+                    ActivityKind.Debt -> QIcons.Up
+                    ActivityKind.Session -> QIcons.Clock
+                },
+                c, Modifier.size(18.dp),
+            )
+        }
+        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+            T(a.name, size = 14.sp)
+            T(a.note, size = 11.5.sp, color = p.mute)
+        }
+        T(
+            ltr((if (positive) "+" else "−") + money(a.amount) + " " + BrandConfig.CURRENCY),
+            size = 14.5.sp, weight = FontWeight.SemiBold, color = c,
+        )
+    }
+}
