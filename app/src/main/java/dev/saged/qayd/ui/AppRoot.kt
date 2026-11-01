@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -96,16 +97,21 @@ fun AppRoot(vm: AppViewModel = viewModel()) {
     if (locked && session is Session.Active) return LockScreen { (ctx as? FragmentActivity)?.let { AppLock.prompt(it) { locked = false } } }
 
     var firstRun by remember { mutableStateOf(!Perms.seen(ctx)) }
-    if (firstRun || Perms.open.value) return PermissionsScreen {
-        Perms.markSeen(ctx)
-        firstRun = false
-        Perms.open.value = false
-    }
-
     val updatesOpen by dev.saged.qayd.system.Updates.pageOpen.collectAsStateWithLifecycle()
     Box(Modifier.fillMaxSize()) {
         AppContent(vm, session)
         if (updatesOpen) dev.saged.qayd.ui.updates.UpdatesPage { dev.saged.qayd.system.Updates.pageOpen.value = false }
+        // الشاشات المنبثقة تُرسم فوق التطبيق، فيبقى المستخدم في مكانه عند إغلاقها
+        if (firstRun || Perms.open.value) {
+            val close = { Perms.markSeen(ctx); firstRun = false; Perms.open.value = false }
+            androidx.activity.compose.BackHandler(onBack = close)
+            PermissionsScreen(close)
+        }
+        // حدّ ثابت خلف شريط الإشعارات حتى لا يمر المحتوى تحته عند التمرير
+        Box(
+            Modifier.fillMaxWidth().windowInsetsTopHeight(androidx.compose.foundation.layout.WindowInsets.statusBars)
+                .background(LocalPalette.current.bg),
+        )
         dev.saged.qayd.ui.updates.UpdateLayer(Modifier.align(Alignment.TopCenter))
     }
 }
