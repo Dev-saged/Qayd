@@ -7,7 +7,9 @@ import dev.saged.qayd.data.AuditEntry
 import dev.saged.qayd.data.Member
 import dev.saged.qayd.data.Module
 import dev.saged.qayd.data.Perm
+import dev.saged.qayd.data.PowerState
 import dev.saged.qayd.data.Prices
+import dev.saged.qayd.ui.power.PowerPage
 import dev.saged.qayd.ui.ps.PsSessionSheet
 import dev.saged.qayd.ui.ps.PsStartSheet
 import dev.saged.qayd.ui.util.cur
@@ -98,10 +100,17 @@ private sealed interface Page {
     data object Expenses : Page
     data object Team : Page
     data object Audit : Page
+    data object Power : Page
 }
 
 /** تنقل صفحات "المزيد". */
-class MoreNav(val expenses: (() -> Unit)?, val team: (() -> Unit)?, val audit: (() -> Unit)?, val prices: (() -> Unit)? = null)
+class MoreNav(
+    val expenses: (() -> Unit)?,
+    val team: (() -> Unit)?,
+    val audit: (() -> Unit)?,
+    val prices: (() -> Unit)? = null,
+    val power: (() -> Unit)? = null,
+)
 
 @Composable
 fun QaydShell(
@@ -115,6 +124,7 @@ fun QaydShell(
     members: List<Member> = emptyList(),
     audit: List<AuditEntry> = emptyList(),
     prices: Prices = Prices.None,
+    power: PowerState = PowerState.Empty,
     more: @Composable (PaddingValues, MoreNav) -> Unit,
 ) {
     val p = LocalPalette.current
@@ -160,6 +170,11 @@ fun QaydShell(
                     }
                     Page.Team -> TeamPage(pad0, members, ledger, onBack = { page = null }, onAdd = { tab = Tab.More; page = null }, onSave = actions.updateMember)
                     Page.Audit -> AuditPage(pad0, audit, onBack = { page = null })
+                    Page.Power -> PowerPage(
+                        pad0, power, prices.kwhPrice, access.can(Perm.RecordReadings), access.can(Perm.ManageElectricity),
+                        onBack = { page = null }, onOpenCustomer = { page = Page.CustomerDetail(it) },
+                        onReading = actions.addReading, onAddSubscriber = actions.addSubscriber,
+                    )
                     Page.Expenses -> ExpensesPage(
                         pad0, ledger, onBack = { page = null }, onAdd = { pad = PadRequest.Expense() },
                         onPay = { pad = PadRequest.Expense(it) },
@@ -171,6 +186,8 @@ fun QaydShell(
                             pad0, shop, account, sync, ledger, slots, access,
                             onQuickSale = { pad = PadRequest.Sale }.takeIf { access.can(Perm.QuickSale) }, onTxTap = tap,
                             onPs = { if (access.can(Perm.ManagePs)) psOpen = it },
+                            pendingReadings = power.pending,
+                            onPower = { page = Page.Power },
                         )
                         Tab.Customers -> CustomersScreen(
                             pad0, ledger, access.can(Perm.ViewBalances), onOpen = { page = Page.CustomerDetail(it.id) },
@@ -183,6 +200,7 @@ fun QaydShell(
                                 expenses = { page = Page.Expenses }.takeIf { access.can(Perm.Expenses) },
                                 team = { page = Page.Team }.takeIf { owner },
                                 audit = { page = Page.Audit }.takeIf { owner },
+                                power = { page = Page.Power }.takeIf { Module.Electricity in shop.modules },
                                 prices = { pricesOpen = true }.takeIf {
                                     access.can(Perm.SetPrices) && (Module.Ps in shop.modules || Module.Electricity in shop.modules)
                                 },

@@ -55,6 +55,8 @@ fun NumpadBody(
     initial: String = "",
     chips: List<PadChip> = emptyList(),
     initialChip: String? = null,
+    unit: String = BrandConfig.CURRENCY,
+    preview: ((Double) -> Pair<String, Boolean>?)? = null,
     onConfirm: (Double, String?) -> Unit,
 ) {
     val p = LocalPalette.current
@@ -72,10 +74,13 @@ fun NumpadBody(
         ) {
             T(title, Modifier.weight(1f), 14.sp, FontWeight.Medium, accent)
             T(
-                "⁦${display(text)} ${BrandConfig.CURRENCY}⁩",
+                "⁦${display(text)} $unit⁩",
                 size = 34.sp, weight = FontWeight.SemiBold, color = if (value > 0) p.ink else p.mute,
             )
         }
+
+        val pv = preview?.invoke(value)
+        if (pv != null) T(pv.first, size = 13.5.sp, weight = FontWeight.Medium, color = if (pv.second) p.danger else p.ok, maxLines = 2)
 
         if (chips.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -120,12 +125,12 @@ fun NumpadBody(
         QButton(
             confirm,
             {
-                if (value > 0) {
+                if (value > 0 && pv?.second != true) {
                     haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                     onConfirm(value, chip)
                 }
             },
-            secondary = value <= 0,
+            secondary = value <= 0 || pv?.second == true,
         )
     }
 }
@@ -166,11 +171,14 @@ fun NumpadSheet(
     initial: String = "",
     chips: List<PadChip> = emptyList(),
     initialChip: String? = null,
+    label: String = "المبلغ",
+    unit: String = BrandConfig.CURRENCY,
+    preview: ((Double) -> Pair<String, Boolean>?)? = null,
     onDismiss: () -> Unit,
     onConfirm: (Double, String?) -> Unit,
 ) {
     QSheet(title, onDismiss) {
-        NumpadBody("المبلغ", subtitle, accent, confirm, initial, chips, initialChip) { v, c ->
+        NumpadBody(label, subtitle, accent, confirm, initial, chips, initialChip, unit, preview) { v, c ->
             onConfirm(v, c)
             onDismiss()
         }

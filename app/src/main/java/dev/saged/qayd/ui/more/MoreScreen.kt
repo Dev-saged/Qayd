@@ -94,6 +94,7 @@ fun MoreScreen(
         }
 
         Column(Modifier.entrance(2).fillMaxWidth().clip(shape).background(p.surface).border(1.dp, p.line, shape).padding(6.dp)) {
+            nav.power?.let { ActionRow(QIcons.Bolt, "الكهرباء", "المشتركون وجولة القراءات وفواتير الشهر", onClick = it) }
             nav.expenses?.let { ActionRow(QIcons.Wallet, "المصروفات", "بضاعة، إنترنت، كهرباء، إيجار، ودفعات شهرية ثابتة", onClick = it) }
             nav.team?.let { ActionRow(QIcons.Users, "الفريق والصلاحيات", "وردية اليوم لكل عضو، وصلاحياته، وإيقافه", onClick = it) }
             nav.prices?.let { ActionRow(QIcons.Edit, "الأسعار", "سعر ساعة الشاشة وكيلو الكهرباء", onClick = it) }

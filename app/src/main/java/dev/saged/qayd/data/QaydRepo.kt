@@ -178,7 +178,10 @@ class QaydRepo(context: Context) {
     }
 
     fun customers(shopId: String): Flow<List<Customer>> = listen("shops/$shopId/customers") {
-        Customer(it.id, it.getString("name").orEmpty(), it.getString("phone").orEmpty(), it.getString("note").orEmpty(), it.millis("createdAt"))
+        Customer(
+            it.id, it.getString("name").orEmpty(), it.getString("phone").orEmpty(), it.getString("note").orEmpty(), it.millis("createdAt"),
+            it.getBoolean("power") == true, it.getString("meter").orEmpty(), it.getDouble("initialReading") ?: 0.0,
+        )
     }
 
     fun txs(shopId: String): Flow<List<Tx>> = listen("shops/$shopId/tx") {
@@ -273,6 +276,36 @@ class QaydRepo(context: Context) {
 
     fun deleteRecurring(shopId: String, id: String) {
         db.document("shops/$shopId/recurring/$id").update(mapOf("deleted" to true, "updatedAt" to FieldValue.serverTimestamp()))
+    }
+
+    /* ---------- الكهرباء ---------- */
+
+    fun readings(shopId: String): Flow<List<Reading>> = listen("shops/$shopId/readings") {
+        Reading(
+            it.id, it.getString("customerId").orEmpty(), it.getDouble("prev") ?: 0.0, it.getDouble("curr") ?: 0.0,
+            it.getDouble("kwh") ?: 0.0, it.getDouble("price") ?: 0.0, it.getDouble("amount") ?: 0.0,
+            it.getString("period").orEmpty(), it.millis("at"), it.getString("byName").orEmpty(),
+        )
+    }
+
+    fun addSubscriber(shopId: String, name: String, phone: String, meter: String, initial: Double): String {
+        val ref = db.collection("shops/$shopId/customers").document()
+        ref.set(stamp() + mapOf("name" to name.trim(), "phone" to phone.trim(), "note" to "", "power" to true, "meter" to meter.trim(), "initialReading" to initial))
+        return ref.id
+    }
+
+    /** قراءة جديدة: تُحفظ القراءة وتُسجل الفاتورة ديناً على المشترك بنفس المرجع. */
+    fun addReading(shopId: String, customerId: String, prev: Double, curr: Double, price: Double) {
+        val (kwh, amount) = PowerState.bill(prev, curr, price)
+        val now = System.currentTimeMillis()
+        val ref = db.collection("shops/$shopId/readings").document()
+        ref.set(
+            stamp() + mapOf(
+                "customerId" to customerId, "prev" to prev, "curr" to curr, "kwh" to kwh, "price" to price,
+                "amount" to amount, "period" to Ledger.period(now), "at" to ts(now),
+            ),
+        )
+        if (amount > 0) addTx(shopId, TxKind.Debt, amount, customerId = customerId, source = "power", ref = ref.id)
     }
 
     /* ---------- الأسعار وشاشات PlayStation ---------- */

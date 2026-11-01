@@ -32,6 +32,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import dev.saged.qayd.data.Access
 import dev.saged.qayd.data.Module
+import dev.saged.qayd.data.PowerState
 import dev.saged.qayd.data.Prices
 import dev.saged.qayd.notify.PsAlarms
 import dev.saged.qayd.data.Account
@@ -113,6 +114,9 @@ private fun ShopRoot(vm: AppViewModel, account: Account) {
                 ) askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
             }
             val ledger = rememberLedger(vm, shop.id)
+            val readings by remember(shop.id) { vm.repo.readings(shop.id) }.collectAsStateWithLifecycle(emptyList())
+            val customers by remember(shop.id) { vm.repo.customers(shop.id) }.collectAsStateWithLifecycle(emptyList())
+            val power = remember(customers, readings) { PowerState.of(customers, readings, System.currentTimeMillis()) }
             val actions = remember(shop.id, ledger, prices) { shopActions(vm, shop.id, ledger, prices) }
             val members by remember(shop.id) { vm.repo.members(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val audit by remember(shop.id, account.role) {
@@ -121,7 +125,7 @@ private fun ShopRoot(vm: AppViewModel, account: Account) {
             val me = members.firstOrNull { it.uid == account.uid }
             val access = if (account.role == Role.Owner) Access.Full else Access(Role.Staff, me?.perms.orEmpty(), me?.active ?: true)
             if (!access.active) return Blocked("حسابك موقوف من صاحب المحل", vm::signOut)
-            QaydShell(shop, account, current.second, ledger, slots, actions, access, members, audit, prices) { pad, nav ->
+            QaydShell(shop, account, current.second, ledger, slots, actions, access, members, audit, prices, power) { pad, nav ->
                 MoreScreen(
                     padding = pad, shop = shop, account = account, sync = current.second, op = op,
                     onRename = { vm.repo.renameShop(shop.id, it) },
@@ -163,6 +167,8 @@ private fun shopActions(vm: AppViewModel, shopId: String, ledger: Ledger, prices
         psExtend = { r.extendPs(shopId, it, 30) },
         psEnd = { s, v, c -> r.endPs(shopId, s, v, c) },
         setPrice = { k, v -> r.setPrice(shopId, k, v) },
+        addReading = { c, prev, curr -> r.addReading(shopId, c, prev, curr, prices.kwhPrice) },
+        addSubscriber = { n, ph, m, v -> r.addSubscriber(shopId, n, ph, m, v) },
     )
 }
 

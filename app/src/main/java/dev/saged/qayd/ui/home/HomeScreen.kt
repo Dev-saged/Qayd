@@ -81,6 +81,8 @@ fun HomeScreen(
     onQuickSale: (() -> Unit)?,
     onTxTap: (Tx) -> Unit,
     onPs: (PsSlot) -> Unit = {},
+    pendingReadings: Int = 0,
+    onPower: () -> Unit = {},
 ) {
     val haptic = LocalHapticFeedback.current
     val now by rememberNow()
@@ -110,7 +112,11 @@ fun HomeScreen(
 
         Row(Modifier.entrance(5), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             MiniStat("متأخرون", ledger.late.toString(), Modifier.weight(1f))
-            MiniStat("الزبائن", ledger.customers.size.toString(), Modifier.weight(1f))
+            if (Module.Electricity in shop.modules) {
+                MiniStat("قراءات معلّقة", pendingReadings.toString(), Modifier.weight(1f).clickable(role = Role.Button, onClick = onPower))
+            } else {
+                MiniStat("الزبائن", ledger.customers.size.toString(), Modifier.weight(1f))
+            }
             if (Module.Sms in shop.modules) GatewayStat(false, Modifier.weight(1f))
         }
         Spacer(Modifier.height(96.dp))

@@ -29,7 +29,16 @@ enum class ExpenseCategory(val key: String, val label: String) {
 }
 
 @Immutable
-data class Customer(val id: String, val name: String, val phone: String, val note: String, val createdAt: Long)
+data class Customer(
+    val id: String,
+    val name: String,
+    val phone: String,
+    val note: String,
+    val createdAt: Long,
+    val power: Boolean = false,
+    val meter: String = "",
+    val initialReading: Double = 0.0,
+)
 
 @Immutable
 data class Tx(

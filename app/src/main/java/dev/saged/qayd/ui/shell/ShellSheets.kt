@@ -65,6 +65,8 @@ class ShopActions(
     val psExtend: (PsSlot) -> Unit = {},
     val psEnd: (PsSlot, Double, String?) -> Unit = { _, _, _ -> },
     val setPrice: (String, Double) -> Unit = { _, _ -> },
+    val addReading: (String, Double, Double) -> Unit = { _, _, _ -> },
+    val addSubscriber: (String, String, String, Double) -> Unit = { _, _, _, _ -> },
 ) {
     companion object {
         val None = ShopActions({}, { _, _ -> }, { _, _ -> }, { _, _, _ -> }, {}, { _, _ -> "" }, { _, _, _ -> }, {})
