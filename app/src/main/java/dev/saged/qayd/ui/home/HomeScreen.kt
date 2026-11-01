@@ -52,6 +52,7 @@ import dev.saged.qayd.data.Tx
 import dev.saged.qayd.data.Module
 import dev.saged.qayd.data.Shop
 import dev.saged.qayd.data.SyncState
+import dev.saged.qayd.ui.components.LockedCard
 import dev.saged.qayd.ui.components.QIcon
 import dev.saged.qayd.ui.components.SyncChip
 import dev.saged.qayd.ui.components.Ring
@@ -83,6 +84,7 @@ fun HomeScreen(
     onPs: (PsSlot) -> Unit = {},
     pendingReadings: Int = 0,
     onPower: () -> Unit = {},
+    locked: List<String> = emptyList(),
 ) {
     val haptic = LocalHapticFeedback.current
     val now by rememberNow()
@@ -97,6 +99,13 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Header(shop, account, sync, Modifier.entrance(0))
+        shop.daysLeft()?.takeIf { it <= 7 }?.let { d ->
+            T(
+                if (d <= 0) "انتهى اشتراك المحل — تواصل مع المالك" else "اشتراك المحل ينتهي خلال $d يوم",
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(LocalPalette.current.warn.copy(alpha = .15f)).padding(12.dp),
+                13.sp, FontWeight.Medium, LocalPalette.current.warn,
+            )
+        }
         if (access.can(Perm.ViewBalances)) Hero(ledger, hidden, onToggle = { hidden = !hidden }, modifier = Modifier.entrance(1))
         if (onQuickSale != null) QuickSale(ledger, Modifier.entrance(2), onQuickSale, onTxTap)
 
@@ -109,6 +118,8 @@ fun HomeScreen(
                 onPs(it)
             }
         }
+
+        locked.forEach { LockedCard(it) }
 
         Row(Modifier.entrance(5), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             MiniStat("متأخرون", ledger.late.toString(), Modifier.weight(1f))

@@ -144,6 +144,30 @@ class QaydRepo(context: Context) {
         db.document("shops/$id").update(mapOf("name" to name.trim(), "updatedAt" to FieldValue.serverTimestamp()))
     }
 
+    fun features(): Flow<Map<String, String>> = callbackFlow {
+        val reg = db.document("config/features").addSnapshotListener { s, _ ->
+            trySend(s?.data.orEmpty().mapValues { it.value.toString() })
+        }
+        awaitClose { reg.remove() }
+    }
+
+    fun setFeature(key: String, paid: Boolean) {
+        db.document("config/features").set(mapOf(key to if (paid) "paid" else "free"), SetOptions.merge())
+    }
+
+    fun updateShop(id: String, modules: Set<Module>, psScreens: Int, paid: Set<String>, licenseUntil: Long?, name: String) {
+        db.document("shops/$id").update(
+            mapOf(
+                "name" to name.trim(),
+                "modules" to Module.entries.associate { it.key to (it in modules) },
+                "psScreens" to psScreens,
+                "paid" to FEATURES.associate { it.first to (it.first in paid) },
+                "licenseUntil" to licenseUntil?.let { Timestamp(java.util.Date(it)) },
+                "updatedAt" to FieldValue.serverTimestamp(),
+            ),
+        )
+    }
+
     fun setShopActive(id: String, active: Boolean) {
         db.document("shops/$id").update(mapOf("active" to active, "updatedAt" to FieldValue.serverTimestamp()))
     }
@@ -164,6 +188,7 @@ class QaydRepo(context: Context) {
             licenseUntil = (get("licenseUntil") as? Timestamp)?.toDate()?.time,
             modules = Module.entries.filter { mods[it.key] == true }.toSet(),
             psScreens = (getLong("psScreens") ?: 3L).toInt(),
+            paid = (get("paid") as? Map<*, *>).orEmpty().filterValues { it == true }.keys.map { it.toString() }.toSet(),
         )
     }
 

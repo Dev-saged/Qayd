@@ -107,3 +107,29 @@ fun QSheet(title: String, onDismiss: () -> Unit, content: @Composable () -> Unit
         }
     }
 }
+
+/** ميزة مدفوعة غير مفعّلة لهذا المحل: توضيح وزر تواصل مع مالك المنصة. */
+@Composable
+fun LockedCard(feature: String, modifier: Modifier = Modifier) {
+    val p = LocalPalette.current
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val shape = RoundedCornerShape(20.dp)
+    Column(modifier.fillMaxWidth().clip(shape).background(p.surface).border(1.dp, p.pri.copy(alpha = .35f), shape).padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            QIcon(dev.saged.qayd.ui.icons.QIcons.Lock, p.pri, Modifier.size(20.dp))
+            T("$feature — ميزة مدفوعة", Modifier.padding(start = 8.dp), 14.5.sp, FontWeight.SemiBold)
+        }
+        T("تواصل مع المالك لتفعيلها لمحلك.", Modifier.padding(top = 6.dp), 12.5.sp, color = p.mute)
+        Spacer(Modifier.height(10.dp))
+        QButton("تواصل عبر واتساب", {
+            runCatching {
+                ctx.startActivity(
+                    android.content.Intent(
+                        android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse("https://wa.me/${dev.saged.qayd.config.BrandConfig.OWNER_WHATSAPP}?text=" + android.net.Uri.encode("أريد تفعيل ميزة $feature في قيد")),
+                    ),
+                )
+            }
+        }, secondary = true)
+    }
+}

@@ -31,6 +31,7 @@ import dev.saged.qayd.data.ExpenseCategory
 import dev.saged.qayd.data.Ledger
 import dev.saged.qayd.data.Tx
 import dev.saged.qayd.data.TxKind
+import dev.saged.qayd.ui.components.LockedCard
 import dev.saged.qayd.ui.components.NumpadSheet
 import dev.saged.qayd.ui.components.PadChip
 import dev.saged.qayd.ui.components.QSheet
@@ -140,9 +141,16 @@ fun QaydShell(
     gateway: Gateway = Gateway.None,
     queue: List<SmsMsg> = emptyList(),
     templates: List<Template> = emptyList(),
+    features: Map<String, String> = emptyMap(),
     more: @Composable (PaddingValues, MoreNav) -> Unit,
 ) {
     val p = LocalPalette.current
+    val full = shop
+    // الوحدات المدفوعة غير المفعّلة لهذا المحل تختفي من الواجهة ويظهر مكانها قفل
+    @Suppress("NAME_SHADOWING")
+    val shop = full.copy(modules = full.modules.filter { full.unlocked(it.key, features) }.toSet())
+    val locked = (full.modules - shop.modules).map { it.label }
+    val pdfOn = full.unlocked("pdf", features)
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
     var page by remember { mutableStateOf<Page?>(null) }
     var pad by remember { mutableStateOf<PadRequest?>(null) }
@@ -188,7 +196,7 @@ fun QaydShell(
                                 onPdf = {
                                     runCatching { pdf.share(pdf.statement(shop, c, ledger.history(c.id))) }
                                     Unit
-                                }.takeIf { access.can(Perm.ExportPdf) },
+                                }.takeIf { access.can(Perm.ExportPdf) && pdfOn },
                                 onTxTap = tap,
                             )
                         }
@@ -214,6 +222,7 @@ fun QaydShell(
                             onPs = { if (access.can(Perm.ManagePs)) psOpen = it },
                             pendingReadings = power.pending,
                             onPower = { page = Page.Power },
+                            locked = locked,
                         )
                         Tab.Customers -> CustomersScreen(
                             pad0, ledger, access.can(Perm.ViewBalances), onOpen = { page = Page.CustomerDetail(it.id) },
@@ -226,6 +235,8 @@ fun QaydShell(
                                 onGateway = { on -> gatewayHere = on; actions.gateway(on) }, onRetry = actions.retrySms,
                                 onEnqueue = actions.enqueueSms, onTemplates = { page = Page.Templates },
                             )
+                        } else if (Module.Sms in full.modules) {
+                            Column(Modifier.padding(pad0).padding(20.dp)) { LockedCard(Module.Sms.label) }
                         } else {
                             EmptyTab(pad0, QIcons.Msg, "الرسائل غير مفعّلة", "تواصل مع مالك المنصة لتفعيل وحدة الرسائل لمحلك.")
                         }
@@ -357,7 +368,7 @@ fun QaydShell(
                 }
                 runCatching { pdf.share(pdf.receipt(shop, t, cust, after)) }
                 Unit
-            }.takeIf { access.can(Perm.ExportPdf) },
+            }.takeIf { access.can(Perm.ExportPdf) && pdfOn },
         ) { confirm = null }
     }
 }

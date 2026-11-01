@@ -80,12 +80,16 @@ private fun AdminRoot(vm: AppViewModel, account: Account) {
     val flow = remember { vm.repo.shops() }
     val data by flow.collectAsStateWithLifecycle(emptyList<Shop>() to SyncState.Offline)
     val op by vm.adminOp.collectAsStateWithLifecycle()
+    val features by remember { vm.repo.features() }.collectAsStateWithLifecycle(emptyMap())
     AdminScreen(
         account = account, shops = data.first, sync = data.second, op = op,
         onCreate = vm::createShop,
         onToggle = { shop, on -> vm.repo.setShopActive(shop.id, on) },
         onClearOp = vm::clearOp,
         onSignOut = vm::signOut,
+        features = features,
+        onFeature = vm.repo::setFeature,
+        onSaveShop = { s, m, n, paid, lic, name -> vm.repo.updateShop(s.id, m, n, paid, lic, name) },
     )
 }
 
@@ -122,6 +126,7 @@ private fun ShopRoot(vm: AppViewModel, account: Account) {
             val gateway by remember(shop.id) { vm.repo.gateway(shop.id) }.collectAsStateWithLifecycle(Gateway.None)
             val queue by remember(shop.id) { vm.repo.smsQueue(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val templates by remember(shop.id) { vm.repo.templates(shop.id) }.collectAsStateWithLifecycle(emptyList())
+            val features by remember { vm.repo.features() }.collectAsStateWithLifecycle(emptyMap())
             val actions = remember(shop.id, ledger, prices) { shopActions(vm, shop.id, ledger, prices, ctx) }
             val members by remember(shop.id) { vm.repo.members(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val audit by remember(shop.id, account.role) {
@@ -130,7 +135,7 @@ private fun ShopRoot(vm: AppViewModel, account: Account) {
             val me = members.firstOrNull { it.uid == account.uid }
             val access = if (account.role == Role.Owner) Access.Full else Access(Role.Staff, me?.perms.orEmpty(), me?.active ?: true)
             if (!access.active) return Blocked("حسابك موقوف من صاحب المحل", vm::signOut)
-            QaydShell(shop, account, current.second, ledger, slots, actions, access, members, audit, prices, power, gateway, queue, templates) { pad, nav ->
+            QaydShell(shop, account, current.second, ledger, slots, actions, access, members, audit, prices, power, gateway, queue, templates, features) { pad, nav ->
                 MoreScreen(
                     padding = pad, shop = shop, account = account, sync = current.second, op = op,
                     onRename = { vm.repo.renameShop(shop.id, it) },

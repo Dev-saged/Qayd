@@ -72,5 +72,8 @@ object QIcons {
     val Search = icon("search", "M17 11a6 6 0 1 1-12 0a6 6 0 1 1 12 0M20 20l-4.3-4.3" to W)
     val Trash = icon("trash", "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" to W)
     val Calendar = icon("calendar", "M4 6a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 10h16M8 3v4M16 3v4" to W)
+    val Lock = icon("lock", "M6 11h12a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1zM8 11V8a4 4 0 0 1 8 0v3" to W)
+    val Chart = icon("chart", "M4 20V10M10 20V4M16 20v-7M22 20H2" to W)
+    val Shield = icon("shield", "M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM9 12l2 2 4-4" to W)
     val Sync = icon("sync", "M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4" to W)
 }

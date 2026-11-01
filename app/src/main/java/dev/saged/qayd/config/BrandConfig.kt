@@ -8,6 +8,9 @@ object BrandConfig {
     const val UPDATE_REPO = "Dev-saged/Qayd"
     const val CURRENCY = "₪"
 
+    /** واتساب مالك المنصة لطلبات التفعيل والمميزات المدفوعة. */
+    const val OWNER_WHATSAPP = "972597857250"
+
     /** Worker العمليات الإدارية (إنشاء المحلات والموظفين). */
     const val ADMIN_API = "https://qayd-admin.dev-mr07.workers.dev"
 

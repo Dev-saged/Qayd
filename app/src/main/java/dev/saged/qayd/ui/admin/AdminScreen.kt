@@ -40,6 +40,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.saged.qayd.data.Account
+import dev.saged.qayd.data.FEATURES
 import dev.saged.qayd.data.Module
 import dev.saged.qayd.data.NewShop
 import dev.saged.qayd.data.Shop
@@ -73,9 +74,14 @@ fun AdminScreen(
     onToggle: (Shop, Boolean) -> Unit,
     onClearOp: () -> Unit,
     onSignOut: () -> Unit,
+    features: Map<String, String> = emptyMap(),
+    onFeature: (String, Boolean) -> Unit = { _, _ -> },
+    onSaveShop: (Shop, Set<Module>, Int, Set<String>, Long?, String) -> Unit = { _, _, _, _, _, _ -> },
 ) {
     val p = LocalPalette.current
     var creating by rememberSaveable { mutableStateOf(false) }
+    var editing by remember { mutableStateOf<Shop?>(null) }
+    var featuresOpen by rememberSaveable { mutableStateOf(false) }
 
     Box(Modifier.fillMaxSize().background(p.bg)) {
         Ambient()
@@ -90,6 +96,8 @@ fun AdminScreen(
                 }
                 SyncChip(sync)
                 Spacer(Modifier.width(10.dp))
+                IconTile(QIcons.Shield, "المميزات المدفوعة", { featuresOpen = true })
+                Spacer(Modifier.width(8.dp))
                 IconTile(QIcons.Logout, "تسجيل الخروج", onSignOut)
             }
 
@@ -111,7 +119,7 @@ fun AdminScreen(
                     T("أنشئ أول محل من الزر في الأسفل.", size = 13.sp, color = p.mute)
                 }
             } else {
-                shops.forEachIndexed { i, s -> ShopCard(s, Modifier.entrance(3 + i.coerceAtMost(6))) { onToggle(s, it) } }
+                shops.forEachIndexed { i, s -> ShopCard(s, Modifier.entrance(3 + i.coerceAtMost(6)).clickable(role = Role.Button) { editing = s }) { onToggle(s, it) } }
             }
             Spacer(Modifier.height(110.dp))
         }
@@ -137,6 +145,55 @@ fun AdminScreen(
     }
 
     if (creating) CreateShopSheet(op, onCreate) { creating = false; onClearOp() }
+    editing?.let { s -> EditShopSheet(s, features, { m, n, paid, lic, name -> onSaveShop(s, m, n, paid, lic, name); editing = null }) { editing = null } }
+    if (featuresOpen) {
+        QSheet("المميزات: مجانية أم مدفوعة", { featuresOpen = false }) {
+            T("الميزة المدفوعة تُقفل عند كل محل لم تفعّلها له، ويظهر له زر التواصل معك.", size = 12.5.sp, color = p.mute, maxLines = 2)
+            FEATURES.forEach { (k, label) -> QSwitchRow("$label — ${if (features[k] == "paid") "مدفوعة" else "مجانية"}", features[k] == "paid", { onFeature(k, it) }) }
+        }
+    }
+}
+
+@Composable
+private fun EditShopSheet(
+    s: Shop,
+    features: Map<String, String>,
+    onSave: (Set<Module>, Int, Set<String>, Long?, String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val p = LocalPalette.current
+    var name by rememberSaveable(s.id) { mutableStateOf(s.name) }
+    var mods by rememberSaveable(s.id) { mutableStateOf(s.modules.map { it.key }.toSet()) }
+    var screens by rememberSaveable(s.id) { mutableStateOf(s.psScreens) }
+    var paid by rememberSaveable(s.id) { mutableStateOf(s.paid) }
+    var until by rememberSaveable(s.id) { mutableStateOf(s.licenseUntil) }
+    val day = 86_400_000L
+    QSheet("تعديل ${s.name}", onDismiss) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            QField(name, { name = it }, "اسم المحل")
+            T("الوحدات", Modifier.padding(top = 6.dp), 14.sp, FontWeight.SemiBold)
+            Module.entries.forEach { m -> QSwitchRow(m.label, m.key in mods, { on -> mods = if (on) mods + m.key else mods - m.key }) }
+            if (Module.Ps.key in mods) QStepper("عدد الشاشات", screens, 1..12) { screens = it }
+            val paidFeatures = FEATURES.filter { features[it.first] == "paid" }
+            if (paidFeatures.isNotEmpty()) {
+                T("المميزات المدفوعة المفعّلة لهذا المحل", Modifier.padding(top = 6.dp), 14.sp, FontWeight.SemiBold)
+                paidFeatures.forEach { (k, label) -> QSwitchRow(label, k in paid, { on -> paid = if (on) paid + k else paid - k }) }
+            }
+            T("الاشتراك", Modifier.padding(top = 6.dp), 14.sp, FontWeight.SemiBold)
+            T(
+                until?.let { "ينتهي ${dev.saged.qayd.ui.util.dayLabel(it)} (${((it - System.currentTimeMillis()) / day).coerceAtLeast(0)} يوم)" } ?: "بدون تاريخ انتهاء",
+                size = 13.sp, color = p.mute,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(30 to "+شهر", 90 to "+3 أشهر", 365 to "+سنة").forEach { (d, l) ->
+                    QButton(l, { until = maxOf(until ?: 0L, System.currentTimeMillis()) + d * day }, Modifier.weight(1f), secondary = true)
+                }
+            }
+            QButton("بدون تاريخ انتهاء", { until = null }, secondary = true)
+            Spacer(Modifier.height(6.dp))
+            QButton("حفظ", { onSave(Module.entries.filter { it.key in mods }.toSet(), screens, paid, until, name.ifBlank { s.name }) })
+        }
+    }
 }
 
 @Composable

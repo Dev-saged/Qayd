@@ -8,6 +8,9 @@ enum class Role(val label: String) {
     Staff("موظف"),
 }
 
+/** مميزات يحددها مالك المنصة مجانية أو مدفوعة (الوحدات + كشف PDF + التقارير). */
+val FEATURES = listOf("ps" to "شاشات PlayStation", "electricity" to "الكهرباء", "sms" to "الرسائل", "pdf" to "كشف الحساب PDF", "reports" to "التقارير")
+
 enum class Module(val key: String, val label: String) {
     Debts("debts", "الديون"),
     Ps("ps", "شاشات PlayStation"),
@@ -39,7 +42,13 @@ data class Shop(
     val licenseUntil: Long?,
     val modules: Set<Module>,
     val psScreens: Int,
+    val paid: Set<String> = emptySet(),
 ) {
+    /** الوحدة مفعّلة للمحل، ومجانية أو مدفوعة له. */
+    fun featureOn(m: Module, features: Map<String, String>) = m in modules && unlocked(m.key, features)
+    fun unlocked(key: String, features: Map<String, String>) = features[key] != "paid" || key in paid
+    fun daysLeft(now: Long = System.currentTimeMillis()): Int? = licenseUntil?.let { ((it - now) / 86_400_000L).toInt() }
+
     /** سبب إيقاف المحل، أو null إن كان فعّالاً. */
     fun blockReason(now: Long = System.currentTimeMillis()): String? = when {
         !active -> "اشتراك المحل موقوف"
