@@ -11,6 +11,22 @@ object BrandConfig {
     /** واتساب مالك المنصة لطلبات التفعيل والمميزات المدفوعة. */
     const val OWNER_WHATSAPP = "972597857250"
 
+    /** بطاقة المصمم في "المزيد". */
+    object Dev {
+        const val NAME = "ساجد العبادلة"
+        const val TITLE = "المهندس ساجد العبادلة"
+        const val PLACE = "صُنع بكل حب من فلسطين — غزة"
+        const val YEAR = 2026
+        val LINKS = listOf(
+            "whatsapp" to "https://wa.me/972597857250",
+            "telegram" to "https://t.me/+972597857250",
+            "instagram" to "https://instagram.com/sajedd.0",
+            "facebook" to "https://facebook.com/saged.t",
+            "x" to "https://x.com/saged_al",
+            "github" to "https://github.com/Dev-saged",
+        )
+    }
+
     /** Worker العمليات الإدارية (إنشاء المحلات والموظفين). */
     const val ADMIN_API = "https://qayd-admin.dev-mr07.workers.dev"
 

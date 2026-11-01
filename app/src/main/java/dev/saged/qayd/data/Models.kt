@@ -9,7 +9,7 @@ enum class Role(val label: String) {
 }
 
 /** مميزات يحددها مالك المنصة مجانية أو مدفوعة (الوحدات + كشف PDF + التقارير). */
-val FEATURES = listOf("ps" to "شاشات PlayStation", "electricity" to "الكهرباء", "sms" to "الرسائل", "pdf" to "كشف الحساب PDF", "reports" to "التقارير")
+val FEATURES = listOf("ps" to "شاشات PlayStation", "electricity" to "الكهرباء", "sms" to "الرسائل", "pdf" to "كشف الحساب PDF", "reports" to "التقارير", "autoBackup" to "النسخ الاحتياطي التلقائي")
 
 enum class Module(val key: String, val label: String) {
     Debts("debts", "الديون"),
@@ -43,7 +43,11 @@ data class Shop(
     val modules: Set<Module>,
     val psScreens: Int,
     val paid: Set<String> = emptySet(),
+    /** حد رسائل الشهر، و-1 بلا حد. */
+    val smsQuota: Int = -1,
 ) {
+    fun smsLeft(used: Int): Int? = smsQuota.takeIf { it >= 0 }?.let { (it - used).coerceAtLeast(0) }
+
     /** الوحدة مفعّلة للمحل، ومجانية أو مدفوعة له. */
     fun featureOn(m: Module, features: Map<String, String>) = m in modules && unlocked(m.key, features)
     fun unlocked(key: String, features: Map<String, String>) = features[key] != "paid" || key in paid

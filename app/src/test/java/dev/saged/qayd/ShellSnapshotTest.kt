@@ -200,9 +200,27 @@ class ShellSnapshotTest {
         assertEquals("120", AmountInput.of(120.0))
     }
 
+    @Test fun devCardDark() = snap("devcard", true, page { dev.saged.qayd.ui.more.DevCard(Modifier.padding(top = 40.dp, start = 20.dp, end = 20.dp)) })
+    @Test fun devCardLight() = snap("devcard", false, page { dev.saged.qayd.ui.more.DevCard(Modifier.padding(top = 40.dp, start = 20.dp, end = 20.dp)) })
+
+    @Test fun messages() = snap("messages", true, page {
+        dev.saged.qayd.ui.messages.MessagesScreen(
+            PaddingValues(top = 24.dp), shop, dev.saged.qayd.data.Gateway.None, emptyList(), ledger,
+            dev.saged.qayd.data.PowerState.of(cs + Customer("c5", "مشترك كهرباء", "0590000000", "", now, power = true), emptyList(), now),
+            dev.saged.qayd.data.Templates.BUILT_IN, smsLeft = 12, smsQuota = 50, canSend = true, canTemplates = true, gatewayHere = false,
+            onGateway = {}, onRetry = {}, onEnqueue = { _, _ -> }, onTemplates = {},
+        )
+    })
+
+    @Test fun smsQuota() {
+        assertEquals(null, shop.smsLeft(500))
+        assertEquals(38, shop.copy(smsQuota = 50).smsLeft(12))
+        assertEquals(0, shop.copy(smsQuota = 50).smsLeft(80))
+    }
+
     @Test fun more() = snap("more", true) {
         Box(Modifier.fillMaxSize().background(LocalPalette.current.bg)) {
-            MoreScreen(PaddingValues(top = 24.dp), shop, owner, SyncState.Pending, Op(), {}, { _, _, _ -> }, {}, {})
+            MoreScreen(PaddingValues(top = 24.dp), shop, owner, SyncState.Pending, Op(), {}, { _, _, _ -> }, {}, {}, autoBackup = false)
         }
     }
 

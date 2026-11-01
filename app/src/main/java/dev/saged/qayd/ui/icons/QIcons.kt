@@ -25,6 +25,32 @@ object QIcons {
 
     private const val W = 1.8f
 
+    private fun solid(name: String, d: String) =
+        ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).apply {
+            addPath(pathData = addPathNodes(d), fill = SolidColor(Color.Black))
+        }.build()
+
+    val WhatsApp = icon(
+        "whatsapp",
+        "M12 3.5a8.5 8.5 0 0 1 0 17 8.4 8.4 0 0 1-4.2-1.1L3.5 20.5l1.2-4.1A8.5 8.5 0 0 1 12 3.5z" to W,
+        "M9.1 8.3c.4 0 .6.1.8.5l.6 1.4c.1.3 0 .6-.2.8l-.5.6c.6 1.2 1.5 2.1 2.7 2.7l.6-.5c.2-.2.5-.3.8-.2l1.4.6c.4.2.5.4.5.8 0 .9-.8 1.6-1.7 1.5-3-.3-5.5-2.8-5.8-5.8-.1-.9.6-1.7 1.5-1.7z" to 1.4f,
+    )
+    val Telegram = icon("telegram", "M20.5 4.5L3.5 11l5.6 2 1.9 6 3-3.6 4.6 3.4zM9.1 13l8.2-5.6-6.3 7.6" to W)
+    val Instagram = icon(
+        "instagram",
+        "M7.5 3.5h9a4 4 0 0 1 4 4v9a4 4 0 0 1-4 4h-9a4 4 0 0 1-4-4v-9a4 4 0 0 1 4-4z" to W,
+        "M15.8 12a3.8 3.8 0 1 1-7.6 0a3.8 3.8 0 1 1 7.6 0" to W,
+        "M17.2 6.9h.01" to 2.6f,
+    )
+    val Facebook = icon("facebook", "M15 3.5h-2a3.5 3.5 0 0 0-3.5 3.5v13.5M7 10.5h7.5" to 2f)
+    val X = icon("x", "M4 4h4.6L20 20h-4.6zM19.6 4l-6.3 7.1M10.7 12.9L4.4 20" to W)
+    val GitHub = icon(
+        "github",
+        "M9 19.5c-4 1.3-4-2-5.6-2.5M15 21.5v-3.4c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6.2 0C6.5 3.4 5.4 3.7 5.4 3.7a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 10.1c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2v3.4" to W,
+    )
+    val Heart = solid("heart", "M12 20.5S3.5 15.6 3.5 9.6A4.6 4.6 0 0 1 12 7a4.6 4.6 0 0 1 8.5 2.6c0 6-8.5 10.9-8.5 10.9z")
+    val Sun = icon("sun", "M16 12a4 4 0 1 1-8 0a4 4 0 1 1 8 0" to W, "M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4" to W)
+
     val Home = icon("home", "M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" to W)
     val Users = icon(
         "users",

@@ -26,6 +26,15 @@ service cloud.firestore {
       return s.get('modules', {}).get(f, false) == true
         && (cfg.get(f, 'free') == 'free' || s.get('paid', {}).get(f, false) == true);
     }
+    function quota(shopId) { return shop(shopId).get('smsQuota', -1); }
+    function withinQuota(shopId, n) { return quota(shopId) < 0 || n <= quota(shopId); }
+    function smsMonth() { return 'sms-' + string(request.time.year()) + '-' + string(request.time.month()); }
+    function smsCounted(shopId) {
+      let path = /databases/$(db)/documents/shops/$(shopId)/usage/$(smsMonth());
+      let before = exists(path) ? get(path).data.get('count', 0) : 0;
+      return isSuper() || quota(shopId) < 0
+        || (existsAfter(path) && getAfter(path).data.get('count', 0) > before && withinQuota(shopId, getAfter(path).data.get('count', 0)));
+    }
     function onlyChanges(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
     function byMe() { return request.resource.data.get('by', '') == request.auth.uid || isSuper(); }
 
@@ -100,8 +109,16 @@ service cloud.firestore {
 
       match /smsQueue/{id} {
         allow read: if member(shopId);
-        allow create: if byMe() && can(shopId, 'sendSms') && featureOn(shopId, 'sms');
+        allow create: if byMe() && can(shopId, 'sendSms') && featureOn(shopId, 'sms') && smsCounted(shopId);
         allow update: if member(shopId) && onlyChanges(['status', 'error', 'sentAt', 'deliveredAt', 'attempts', 'gateway', 'updatedAt']);
+      }
+
+      match /usage/{doc} {
+        allow read: if member(shopId);
+        allow create, update: if can(shopId, 'sendSms') && featureOn(shopId, 'sms')
+          && request.resource.data.keys().hasOnly(['count']) && request.resource.data.count is int
+          && request.resource.data.count >= (resource == null ? 0 : resource.data.count)
+          && withinQuota(shopId, request.resource.data.count);
       }
 
       match /gateway/{doc} {

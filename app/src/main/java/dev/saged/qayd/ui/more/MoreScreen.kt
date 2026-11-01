@@ -30,7 +30,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import dev.saged.qayd.BuildConfig
+import androidx.compose.foundation.clickable
 import dev.saged.qayd.config.BrandConfig
 import dev.saged.qayd.data.Account
 import dev.saged.qayd.data.Role
@@ -64,6 +64,7 @@ fun MoreScreen(
     onClearOp: () -> Unit,
     onSignOut: () -> Unit,
     nav: MoreNav = MoreNav(null, null, null),
+    autoBackup: Boolean? = null,
 ) {
     val p = LocalPalette.current
     var sheet by rememberSaveable { mutableStateOf<MoreSheet?>(null) }
@@ -105,11 +106,13 @@ fun MoreScreen(
                 ActionRow(QIcons.UserPlus, "إضافة موظف", "حساب دخول جديد على نطاق ⁦@${shop.suffix}⁩") { onClearOp(); sheet = MoreSheet.Staff }
             }
             nav.backup?.let { ActionRow(QIcons.Shield, "نسخة احتياطية", "ملف بكل الزبائن والحركات والقراءات تحفظه أو ترسله", onClick = it) }
+            autoBackup?.let { AutoBackupRow(it) }
+            ThemeRow()
             LockRow()
             ActionRow(QIcons.Logout, "تسجيل الخروج", danger = true, onClick = onSignOut)
         }
 
-        T("${BrandConfig.NAME} ${BuildConfig.VERSION_NAME}", Modifier.entrance(3).fillMaxWidth().padding(top = 6.dp), 12.sp, color = p.mute)
+        DevCard(Modifier.entrance(3))
         Spacer(Modifier.height(96.dp))
     }
 
@@ -169,4 +172,57 @@ private fun LockRow() {
         on = it
         dev.saged.qayd.system.AppLock.setEnabled(ctx, it)
     }, Modifier.padding(horizontal = 6.dp))
+}
+
+@Composable
+private fun ThemeRow() {
+    val p = LocalPalette.current
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val cur = dev.saged.qayd.system.ThemePref.mode.value
+    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        dev.saged.qayd.ui.components.QIcon(QIcons.Sun, p.ink, Modifier.size(22.dp))
+        T("المظهر", Modifier.weight(1f).padding(horizontal = 12.dp), 15.sp, FontWeight.Medium)
+        Row(Modifier.clip(RoundedCornerShape(14.dp)).background(p.surface2).padding(3.dp)) {
+            dev.saged.qayd.system.ThemePref.Mode.entries.forEach { m ->
+                val on = m == cur
+                T(
+                    m.label,
+                    Modifier.clip(RoundedCornerShape(11.dp)).background(if (on) p.pri else Color.Transparent)
+                        .clickable(role = androidx.compose.ui.semantics.Role.RadioButton) { dev.saged.qayd.system.ThemePref.set(ctx, m) }
+                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                    12.5.sp, if (on) FontWeight.SemiBold else FontWeight.Normal, if (on) p.onPri else p.ink,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AutoBackupRow(unlocked: Boolean) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    if (!unlocked) {
+        ActionRow(QIcons.Lock, "النسخ الاحتياطي التلقائي", "ميزة مدفوعة: نسخة يومية تلقائية. اضغط للتواصل مع المالك") {
+            runCatching {
+                ctx.startActivity(
+                    android.content.Intent(
+                        android.content.Intent.ACTION_VIEW,
+                        android.net.Uri.parse("https://wa.me/${BrandConfig.OWNER_WHATSAPP}?text=" + android.net.Uri.encode("أريد تفعيل النسخ الاحتياطي التلقائي في قيد")),
+                    ),
+                )
+            }
+        }
+        return
+    }
+    var on by androidx.compose.runtime.remember { mutableStateOf(dev.saged.qayd.system.AutoBackup.enabled(ctx)) }
+    val last = dev.saged.qayd.system.AutoBackup.lastAt(ctx)
+    Column(Modifier.padding(horizontal = 6.dp)) {
+        dev.saged.qayd.ui.components.QSwitchRow("نسخ احتياطي تلقائي يومي", on, {
+            on = it
+            dev.saged.qayd.system.AutoBackup.setEnabled(ctx, it)
+        })
+        if (on) T(
+            if (last > 0) "آخر نسخة ${dev.saged.qayd.ui.util.dayLabel(last)} ${dev.saged.qayd.ui.util.clock(last)} · في التنزيلات/Qayd" else "أول نسخة عند فتح التطبيق القادم · في التنزيلات/Qayd",
+            Modifier.padding(start = 6.dp, bottom = 8.dp), 12.sp, color = LocalPalette.current.mute,
+        )
+    }
 }

@@ -84,6 +84,20 @@ try {
   check('owner sets prices', (await writeAs(ownerA.idToken, `shops/${A}/settings/prices`, { psRate: { doubleValue: 5 } })) === 200);
   check('staff runs PS screen (module on)', (await writeAs(staffA.idToken, `shops/${A}/ps/1`, { bookedMinutes: { integerValue: '60' } })) === 200);
   check('SMS blocked when module off', (await writeAs(staffA.idToken, `shops/${A}/smsQueue/m1`, { to: { stringValue: '0599' }, by: by(staffA.idToken) })) === 403);
+  // حد الرسائل الشهري: المالك العام يفعّل الرسائل بحد رسالة واحدة
+  check('super sets SMS quota', (await writeAs(superTok, `shops/${A}?updateMask.fieldPaths=modules.sms&updateMask.fieldPaths=smsQuota`, { modules: { mapValue: { fields: { sms: { booleanValue: true } } } }, smsQuota: { integerValue: '1' } })) === 200);
+  const now = new Date();
+  const month = `sms-${now.getUTCFullYear()}-${now.getUTCMonth() + 1}`;
+  const commit = (tok, id) => fetch(`${docs.replace(/\/documents$/, '')}/documents:commit`, {
+    method: 'POST', headers: { authorization: `Bearer ${tok}`, 'content-type': 'application/json' },
+    body: JSON.stringify({ writes: [
+      { update: { name: `projects/${p}/databases/(default)/documents/shops/${A}/smsQueue/${id}`, fields: { to: { stringValue: '0599' }, by: by(tok) } }, currentDocument: { exists: false } },
+      { transform: { document: `projects/${p}/databases/(default)/documents/shops/${A}/usage/${month}`, fieldTransforms: [{ fieldPath: 'count', increment: { integerValue: '1' } }] } },
+    ] }),
+  }).then((r) => r.status);
+  check('SMS without counting rejected', (await writeAs(staffA.idToken, `shops/${A}/smsQueue/q0`, { to: { stringValue: '0599' }, by: by(staffA.idToken) })) === 403);
+  check('SMS within quota allowed', (await commit(staffA.idToken, 'q1')) === 200);
+  check('SMS over quota rejected', (await commit(staffA.idToken, 'q2')) === 403);
   check('owner disables staff', (await writeAs(ownerA.idToken, `shops/${A}/members/${staff.body.uid}?updateMask.fieldPaths=active`, { active: { booleanValue: false } })) === 200);
   check('disabled staff cannot write', (await writeAs(staffA.idToken, `shops/${A}/tx/t4`, tx('sale'))) === 403);
   check('staff cannot edit members', (await writeAs(staffA.idToken, `shops/${A}/members/${staff.body.uid}`, { role: { stringValue: 'owner' } })) === 403);
@@ -99,7 +113,7 @@ try {
   for (const id of created.shops.filter(Boolean)) {
     const members = await call(t, `${docs}/shops/${id}/members`).catch(() => ({}));
     for (const d of members.documents || []) await call(t, `https://firestore.googleapis.com/v1/${d.name}`, 'DELETE').catch(() => {});
-    for (const sub of ['customers/c1', 'tx/t1', 'tx/t2', 'settings/prices', 'ps/1']) await del(`shops/${id}/${sub}`);
+    for (const sub of ['customers/c1', 'tx/t1', 'tx/t2', 'settings/prices', 'ps/1', 'smsQueue/q1', `usage/sms-${new Date().getUTCFullYear()}-${new Date().getUTCMonth() + 1}`]) await del(`shops/${id}/${sub}`);
     await del(`shops/${id}`);
   }
   for (const s of created.suffixes) await del(`suffixes/${s}`);

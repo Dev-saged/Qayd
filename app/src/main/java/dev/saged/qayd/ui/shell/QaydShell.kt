@@ -147,6 +147,7 @@ fun QaydShell(
     queue: List<SmsMsg> = emptyList(),
     templates: List<Template> = emptyList(),
     features: Map<String, String> = emptyMap(),
+    smsUsed: Int = 0,
     more: @Composable (PaddingValues, MoreNav) -> Unit,
 ) {
     val p = LocalPalette.current
@@ -237,6 +238,7 @@ fun QaydShell(
                         Tab.Messages -> if (Module.Sms in shop.modules) {
                             MessagesScreen(
                                 pad0, shop, gateway, queue, ledger, power, allTemplates,
+                                smsLeft = full.smsLeft(smsUsed), smsQuota = full.smsQuota,
                                 canSend = access.can(Perm.SendSms), canTemplates = access.can(Perm.ManageTemplates), gatewayHere = gatewayHere,
                                 onGateway = { on -> gatewayHere = on; actions.gateway(on) }, onRetry = actions.retrySms,
                                 onEnqueue = actions.enqueueSms, onTemplates = { page = Page.Templates },
@@ -335,6 +337,7 @@ fun QaydShell(
                 "رسالة إلى ${c.customer.name}", allTemplates, 1,
                 preview = { t -> Templates.fill(t.body, smsVars(shop, c, reading)) },
                 onSend = { t -> actions.enqueueSms(listOf(Triple(c.customer.phone, c.customer.name, Templates.fill(t.body, smsVars(shop, c, reading)))), t.title) },
+                left = full.smsLeft(smsUsed),
             ) { smsFor = null }
         }
     }

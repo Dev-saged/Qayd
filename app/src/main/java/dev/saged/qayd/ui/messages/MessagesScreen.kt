@@ -86,7 +86,21 @@ fun smsVars(shop: Shop, c: CustomerBalance, reading: Reading? = null, amount: Do
     )
 }
 
-private enum class Bulk(val label: String) { Debtors("تذكير كل المدينين"), Late("تذكير المتأخرين فقط"), Power("فواتير الكهرباء لهذا الشهر") }
+/** فئات الإرسال الجماعي: حسب الرصيد، ثم حسب القسم. */
+private enum class Bulk(val label: String, val byDept: Boolean = false) {
+    All("الكل"), Debtors("المدينون"), Late("المتأخرون"), Credit("لهم رصيد"),
+    Shop("زبائن المحل", true), Subscribers("مشتركو الكهرباء", true), Power("فواتير الشهر", true),
+}
+
+private fun targetsOf(b: Bulk, ledger: Ledger, power: PowerState): List<Pair<CustomerBalance, Reading?>> = when (b) {
+    Bulk.All -> ledger.customers.map { it to null }
+    Bulk.Debtors -> ledger.customers.filter { it.balance > 0 }.map { it to null }
+    Bulk.Late -> ledger.customers.filter { it.late }.map { it to null }
+    Bulk.Credit -> ledger.customers.filter { it.balance < 0 }.map { it to null }
+    Bulk.Shop -> ledger.customers.filter { !it.customer.power }.map { it to null }
+    Bulk.Subscribers -> ledger.customers.filter { it.customer.power }.map { c -> c to power.subscribers.firstOrNull { it.customer.id == c.customer.id }?.history?.firstOrNull() }
+    Bulk.Power -> power.subscribers.mapNotNull { s -> s.thisMonth?.let { r -> ledger.balanceOf(s.customer.id)?.let { it to r } } }
+}.filter { it.first.customer.phone.isNotBlank() }
 
 @Composable
 fun MessagesScreen(
@@ -97,6 +111,8 @@ fun MessagesScreen(
     ledger: Ledger,
     power: PowerState,
     templates: List<Template>,
+    smsLeft: Int?,
+    smsQuota: Int,
     canSend: Boolean,
     canTemplates: Boolean,
     gatewayHere: Boolean,
@@ -161,16 +177,19 @@ fun MessagesScreen(
             }
         }
         if (canSend) {
-            item { T("إرسال جماعي", Modifier.padding(top = 4.dp), 14.5.sp, FontWeight.SemiBold) }
             item {
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Bulk.entries.filter { it != Bulk.Power || power.subscribers.isNotEmpty() }.forEach { b ->
-                        T(
-                            b.label,
-                            Modifier.clip(RoundedCornerShape(14.dp)).background(p.surface).border(1.dp, p.line, RoundedCornerShape(14.dp))
-                                .clickable(role = Role.Button) { bulk = b }.padding(horizontal = 14.dp, vertical = 10.dp),
-                            13.sp, FontWeight.Medium, p.pri,
-                        )
+                val shape = RoundedCornerShape(22.dp)
+                Column(Modifier.fillMaxWidth().clip(shape).background(p.surface).border(1.dp, p.line, shape).padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        T("إرسال جماعي", Modifier.weight(1f), 15.sp, FontWeight.SemiBold)
+                        if (smsLeft != null) T("المتبقي $smsLeft من $smsQuota هذا الشهر", size = 12.sp, color = if (smsLeft == 0) p.danger else p.mute)
+                    }
+                    val depts = power.subscribers.isNotEmpty()
+                    listOf(false, true).filter { it == false || depts }.forEach { dept ->
+                        T(if (dept) "حسب القسم" else "حسب الرصيد", Modifier.padding(top = 12.dp, bottom = 8.dp), 12.sp, color = p.mute)
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Bulk.entries.filter { it.byDept == dept }.forEach { b -> Segment(b.label, targetsOf(b, ledger, power).size) { bulk = b } }
+                        }
                     }
                 }
             }
@@ -214,14 +233,11 @@ fun MessagesScreen(
 
     bulk?.let { b ->
         val all = templates
-        val targets: List<Pair<CustomerBalance, Reading?>> = when (b) {
-            Bulk.Debtors -> ledger.customers.filter { it.balance > 0 }.map { it to null }
-            Bulk.Late -> ledger.customers.filter { it.late }.map { it to null }
-            Bulk.Power -> power.subscribers.mapNotNull { s -> s.thisMonth?.let { r -> ledger.balanceOf(s.customer.id)?.let { it to r } } }
-        }.filter { it.first.customer.phone.isNotBlank() }
-        val kind = if (b == Bulk.Power) TemplateKind.Power else TemplateKind.Debt
+        val targets = targetsOf(b, ledger, power)
+        val kind = if (b == Bulk.Power || b == Bulk.Subscribers) TemplateKind.Power else TemplateKind.Debt
         SendSheet(
-            title = b.label,
+            title = "${b.label} · ${targets.size}",
+            left = smsLeft,
             templates = all.filter { it.kind == kind } + all.filter { it.kind == TemplateKind.General },
             count = targets.size,
             preview = { t -> targets.firstOrNull()?.let { (c, r) -> Templates.fill(t.body, smsVars(shop, c, r)) } ?: "لا أحد برقم جوال في هذه الفئة" },
@@ -229,6 +245,21 @@ fun MessagesScreen(
                 onEnqueue(targets.map { (c, r) -> Triple(c.customer.phone, c.customer.name, Templates.fill(t.body, smsVars(shop, c, r))) }, t.title)
             },
         ) { bulk = null }
+    }
+}
+
+@Composable
+private fun Segment(label: String, n: Int, onClick: () -> Unit) {
+    val p = LocalPalette.current
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        Modifier.clip(shape).background(p.surface2).border(1.dp, p.line, shape).clickable(enabled = n > 0, role = Role.Button, onClick = onClick)
+            .padding(start = 14.dp, end = 8.dp, top = 9.dp, bottom = 9.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        T(label, size = 13.sp, weight = FontWeight.Medium, color = if (n > 0) p.ink else p.mute)
+        T(n.toString(), Modifier.padding(start = 8.dp).clip(RoundedCornerShape(8.dp)).background(if (n > 0) p.pri.copy(alpha = .16f) else p.line)
+            .padding(horizontal = 7.dp, vertical = 2.dp), 11.5.sp, FontWeight.SemiBold, if (n > 0) p.pri else p.mute)
     }
 }
 
@@ -249,6 +280,7 @@ fun SendSheet(
     count: Int,
     preview: (Template) -> String,
     onSend: (Template) -> Unit,
+    left: Int? = null,
     onDismiss: () -> Unit,
 ) {
     val p = LocalPalette.current
@@ -271,7 +303,15 @@ fun SendSheet(
             T(preview(t), Modifier.padding(top = 14.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(p.surface2).padding(14.dp), 13.5.sp, maxLines = 14)
         }
         Spacer(Modifier.height(16.dp))
-        QButton(if (count > 1) "أضف $count رسالة للطابور" else "أرسل", { if (t != null && count > 0) { onSend(t); onDismiss() } }, secondary = count == 0)
+        if (left != null && count > left) {
+            dev.saged.qayd.ui.components.LockedCard(
+                "رسائل إضافية",
+                title = if (left == 0) "انتهت رسائل هذا الشهر" else "المتبقي $left رسالة فقط",
+                body = "حد رسائل محلك الشهري لا يكفي لهذا الإرسال. تواصل مع مسؤول التطبيق للاشتراك.",
+            )
+        } else {
+            QButton(if (count > 1) "أضف $count رسالة للطابور" else "أرسل", { if (t != null && count > 0) { onSend(t); onDismiss() } }, secondary = count == 0)
+        }
     }
 }
 

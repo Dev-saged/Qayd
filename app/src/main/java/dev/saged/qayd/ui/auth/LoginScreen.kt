@@ -77,7 +77,7 @@ fun LoginScreen(op: Op, onSubmit: (String, String) -> Unit) {
                     .background(Brush.linearGradient(listOf(p.surface2, p.surface))),
                 contentAlignment = Alignment.Center,
             ) {
-                Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = BrandConfig.NAME, Modifier.size(150.dp))
+                Image(painterResource(R.drawable.qayd_logo), contentDescription = BrandConfig.NAME, Modifier.size(112.dp))
             }
             Spacer(Modifier.height(18.dp))
             T(BrandConfig.NAME, Modifier.entrance(1), 34.sp, FontWeight.Bold)

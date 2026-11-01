@@ -47,6 +47,7 @@ import dev.saged.qayd.data.Reading
 import dev.saged.qayd.data.Template
 import dev.saged.qayd.system.AppLock
 import dev.saged.qayd.system.AppUpdate
+import dev.saged.qayd.system.AutoBackup
 import dev.saged.qayd.system.Backup
 import dev.saged.qayd.system.Updater
 import kotlinx.coroutines.launch
@@ -134,7 +135,7 @@ private fun AdminRoot(vm: AppViewModel, account: Account) {
         onSignOut = vm::signOut,
         features = features,
         onFeature = vm.repo::setFeature,
-        onSaveShop = { s, m, n, paid, lic, name -> vm.repo.updateShop(s.id, m, n, paid, lic, name) },
+        onSaveShop = { s, m, n, paid, lic, name, quota -> vm.repo.updateShop(s.id, m, n, paid, lic, name, quota) },
     )
 }
 
@@ -172,6 +173,7 @@ private fun ShopRoot(vm: AppViewModel, account: Account) {
             val queue by remember(shop.id) { vm.repo.smsQueue(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val templates by remember(shop.id) { vm.repo.templates(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val features by remember { vm.repo.features() }.collectAsStateWithLifecycle(emptyMap())
+            val smsUsed by remember(shop.id) { vm.repo.smsUsed(shop.id) }.collectAsStateWithLifecycle(0)
             val actions = remember(shop.id, ledger, prices, customers, readings, templates) {
                 shopActions(vm, shop.id, ledger, prices, ctx, customers, readings, templates)
             }
@@ -179,10 +181,18 @@ private fun ShopRoot(vm: AppViewModel, account: Account) {
             val audit by remember(shop.id, account.role) {
                 if (account.role == Role.Owner) vm.repo.audit(shop.id) else kotlinx.coroutines.flow.flowOf(emptyList())
             }.collectAsStateWithLifecycle(emptyList())
+            val autoBackupOn = account.role == Role.Owner && shop.unlocked("autoBackup", features)
+            LaunchedEffect(autoBackupOn, customers.size, ledger.allTx.size) {
+                if (autoBackupOn && customers.isNotEmpty() && AutoBackup.due(ctx)) {
+                    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                        runCatching { AutoBackup.store(ctx, Backup.write(ctx, shop.id, ledger, customers, readings, templates)) }
+                    }
+                }
+            }
             val me = members.firstOrNull { it.uid == account.uid }
             val access = if (account.role == Role.Owner) Access.Full else Access(Role.Staff, me?.perms.orEmpty(), me?.active ?: true)
             if (!access.active) return Blocked("حسابك موقوف من صاحب المحل", vm::signOut)
-            QaydShell(shop, account, current.second, ledger, slots, actions, access, members, audit, prices, power, gateway, queue, templates, features) { pad, nav ->
+            QaydShell(shop, account, current.second, ledger, slots, actions, access, members, audit, prices, power, gateway, queue, templates, features, smsUsed) { pad, nav ->
                 MoreScreen(
                     padding = pad, shop = shop, account = account, sync = current.second, op = op,
                     onRename = { vm.repo.renameShop(shop.id, it) },
@@ -190,6 +200,7 @@ private fun ShopRoot(vm: AppViewModel, account: Account) {
                     onClearOp = vm::clearOp,
                     onSignOut = vm::signOut,
                     nav = nav,
+                    autoBackup = if (account.role == Role.Owner) shop.unlocked("autoBackup", features) else null,
                 )
             }
         }

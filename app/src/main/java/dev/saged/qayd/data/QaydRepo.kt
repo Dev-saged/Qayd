@@ -155,7 +155,7 @@ class QaydRepo(context: Context) {
         db.document("config/features").set(mapOf(key to if (paid) "paid" else "free"), SetOptions.merge())
     }
 
-    fun updateShop(id: String, modules: Set<Module>, psScreens: Int, paid: Set<String>, licenseUntil: Long?, name: String) {
+    fun updateShop(id: String, modules: Set<Module>, psScreens: Int, paid: Set<String>, licenseUntil: Long?, name: String, smsQuota: Int) {
         db.document("shops/$id").update(
             mapOf(
                 "name" to name.trim(),
@@ -163,6 +163,7 @@ class QaydRepo(context: Context) {
                 "psScreens" to psScreens,
                 "paid" to FEATURES.associate { it.first to (it.first in paid) },
                 "licenseUntil" to licenseUntil?.let { Timestamp(java.util.Date(it)) },
+                "smsQuota" to smsQuota,
                 "updatedAt" to FieldValue.serverTimestamp(),
             ),
         )
@@ -189,6 +190,7 @@ class QaydRepo(context: Context) {
             modules = Module.entries.filter { mods[it.key] == true }.toSet(),
             psScreens = (getLong("psScreens") ?: 3L).toInt(),
             paid = (get("paid") as? Map<*, *>).orEmpty().filterValues { it == true }.keys.map { it.toString() }.toSet(),
+            smsQuota = (getLong("smsQuota") ?: -1L).toInt(),
         )
     }
 
@@ -378,8 +380,20 @@ class QaydRepo(context: Context) {
                     stamp() + mapOf("to" to to, "name" to name, "text" to text, "template" to template, "status" to "queued", "attempts" to 0, "at" to now),
                 )
             }
+            batch.set(db.document("shops/$shopId/usage/${smsMonth()}"), mapOf("count" to FieldValue.increment(chunk.size.toLong())), SetOptions.merge())
             batch.commit()
         }
+    }
+
+    /** عدّاد رسائل الشهر بتوقيت UTC، بنفس معرّف القواعد. */
+    private fun smsMonth(): String {
+        val c = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("UTC"))
+        return "sms-${c.get(java.util.Calendar.YEAR)}-${c.get(java.util.Calendar.MONTH) + 1}"
+    }
+
+    fun smsUsed(shopId: String): Flow<Int> = callbackFlow {
+        val reg = db.document("shops/$shopId/usage/${smsMonth()}").addSnapshotListener { s, _ -> trySend((s?.getLong("count") ?: 0L).toInt()) }
+        awaitClose { reg.remove() }
     }
 
     fun retrySms(shopId: String, id: String) {

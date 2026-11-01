@@ -32,7 +32,7 @@
 - `shops/{id}/tx/{tid}`: kind(sale|debt|payment|expense), amount, at, customerId?, category?, recurringId?, period?(YYYY-MM), by, byName, deleted.
 - `shops/{id}/recurring/{rid}`: title, category, day, deleted.
 - `app/src/main/res/` — adaptive icon (vector ق mark), splash theme, Readex fonts.
-- `brand/` — master mark SVG + 1024 PNG; `brand/tools/make_icon.py` regenerates the seal icon (SVG + adaptive foreground/background/monochrome).
+- `brand/` — master mark SVG + 1024 PNG; `brand/tools/make_kufi_icon.py` regenerates the Kufi icon layers; `brand/concepts/` holds the reviewed directions.
 - `docs/SPEC.md` — requirements, decisions, permissions. `docs/screens/` — current snapshots.
 - `prototype/home-directions.html` — the three static directions (A approved).
 
@@ -46,6 +46,7 @@
 ## Changes
 - v0.1.0: shell + home (direction A), icon, CI, per-build releases.
 - v0.2.0: Firebase auth + offline session, super admin panel, staff creation, shop rename, sync chip, Worker + rules.
+- v1.1.0: Kufi icon (brand/tools/make_kufi_icon.py → launcher layers + drawable/qayd_logo), system/ThemePref (System/Light/Dark), system/AutoBackup (daily, Downloads/Qayd, keep 7; feature autoBackup), Shop.smsQuota + shops/{id}/usage/sms-YYYY-M counter enforced in rules, MessagesScreen bulk segments, ui/more/DevCard.
 - v1.0.0: data/Reports.kt + ui/reports, system/AppLock (biometric, FragmentActivity), system/Backup (JSON share), system/Updater (Worker /v1/app/latest + /v1/app/apk from KV QAYD_APP, uploaded by CI), UpdateBanner + LockScreen in AppRoot.
 - v0.9.0: FEATURES + Shop.paid/unlocked/featureOn/daysLeft, config/features (free|paid), AdminScreen EditShopSheet + features sheet, LockedCard (WhatsApp owner), shell filters locked modules.
 - v0.8.0: pdf/QaydPdf.kt (PdfDocument + StaticLayout RTL, statement A4 paged, receipt 80mm, zxing QR, FileProvider share).

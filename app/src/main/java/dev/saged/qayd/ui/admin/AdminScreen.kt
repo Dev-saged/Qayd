@@ -76,7 +76,7 @@ fun AdminScreen(
     onSignOut: () -> Unit,
     features: Map<String, String> = emptyMap(),
     onFeature: (String, Boolean) -> Unit = { _, _ -> },
-    onSaveShop: (Shop, Set<Module>, Int, Set<String>, Long?, String) -> Unit = { _, _, _, _, _, _ -> },
+    onSaveShop: (Shop, Set<Module>, Int, Set<String>, Long?, String, Int) -> Unit = { _, _, _, _, _, _, _ -> },
 ) {
     val p = LocalPalette.current
     var creating by rememberSaveable { mutableStateOf(false) }
@@ -145,7 +145,7 @@ fun AdminScreen(
     }
 
     if (creating) CreateShopSheet(op, onCreate) { creating = false; onClearOp() }
-    editing?.let { s -> EditShopSheet(s, features, { m, n, paid, lic, name -> onSaveShop(s, m, n, paid, lic, name); editing = null }) { editing = null } }
+    editing?.let { s -> EditShopSheet(s, features, { m, n, paid, lic, name, quota -> onSaveShop(s, m, n, paid, lic, name, quota); editing = null }) { editing = null } }
     if (featuresOpen) {
         QSheet("المميزات: مجانية أم مدفوعة", { featuresOpen = false }) {
             T("الميزة المدفوعة تُقفل عند كل محل لم تفعّلها له، ويظهر له زر التواصل معك.", size = 12.5.sp, color = p.mute, maxLines = 2)
@@ -158,7 +158,7 @@ fun AdminScreen(
 private fun EditShopSheet(
     s: Shop,
     features: Map<String, String>,
-    onSave: (Set<Module>, Int, Set<String>, Long?, String) -> Unit,
+    onSave: (Set<Module>, Int, Set<String>, Long?, String, Int) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val p = LocalPalette.current
@@ -167,6 +167,8 @@ private fun EditShopSheet(
     var screens by rememberSaveable(s.id) { mutableStateOf(s.psScreens) }
     var paid by rememberSaveable(s.id) { mutableStateOf(s.paid) }
     var until by rememberSaveable(s.id) { mutableStateOf(s.licenseUntil) }
+    var quota by rememberSaveable(s.id) { mutableStateOf(if (s.smsQuota >= 0) s.smsQuota.toString() else "50") }
+    var unlimited by rememberSaveable(s.id) { mutableStateOf(s.smsQuota < 0) }
     val day = 86_400_000L
     QSheet("تعديل ${s.name}", onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -174,6 +176,15 @@ private fun EditShopSheet(
             T("الوحدات", Modifier.padding(top = 6.dp), 14.sp, FontWeight.SemiBold)
             Module.entries.forEach { m -> QSwitchRow(m.label, m.key in mods, { on -> mods = if (on) mods + m.key else mods - m.key }) }
             if (Module.Ps.key in mods) QStepper("عدد الشاشات", screens, 1..12) { screens = it }
+            if (Module.Sms.key in mods) {
+                T("حد الرسائل الشهري", Modifier.padding(top = 6.dp), 14.sp, FontWeight.SemiBold)
+                QSwitchRow("غير محدود", unlimited, { unlimited = it })
+                if (!unlimited) {
+                    QField(quota, { v -> quota = v.filter(Char::isDigit).take(6) }, "عدد الرسائل المسموح في الشهر", hint = "50", ltr = true,
+                        error = if (quota.isBlank()) "اكتب رقماً" else null)
+                    T("عند انتهائها يظهر للمحل أن يتواصل معك للاشتراك.", size = 12.sp, color = p.mute)
+                }
+            }
             val paidFeatures = FEATURES.filter { features[it.first] == "paid" }
             if (paidFeatures.isNotEmpty()) {
                 T("المميزات المدفوعة المفعّلة لهذا المحل", Modifier.padding(top = 6.dp), 14.sp, FontWeight.SemiBold)
@@ -191,7 +202,9 @@ private fun EditShopSheet(
             }
             QButton("بدون تاريخ انتهاء", { until = null }, secondary = true)
             Spacer(Modifier.height(6.dp))
-            QButton("حفظ", { onSave(Module.entries.filter { it.key in mods }.toSet(), screens, paid, until, name.ifBlank { s.name }) })
+            QButton("حفظ", {
+                onSave(Module.entries.filter { it.key in mods }.toSet(), screens, paid, until, name.ifBlank { s.name }, if (unlimited) -1 else quota.toIntOrNull() ?: 0)
+            })
         }
     }
 }
@@ -226,7 +239,11 @@ private fun ShopCard(s: Shop, modifier: Modifier, onToggle: (Boolean) -> Unit) {
             FlowRow(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 s.modules.sortedBy { it.ordinal }.forEach { m ->
                     T(
-                        if (m == Module.Ps) "${m.label} · ${s.psScreens}" else m.label,
+                        when (m) {
+                            Module.Ps -> "${m.label} · ${s.psScreens}"
+                            Module.Sms -> "${m.label} · ${if (s.smsQuota < 0) "غير محدود" else "${s.smsQuota}/شهر"}"
+                            else -> m.label
+                        },
                         Modifier.clip(RoundedCornerShape(10.dp)).background(p.surface2).padding(horizontal = 10.dp, vertical = 4.dp),
                         11.5.sp, color = p.ink,
                     )
