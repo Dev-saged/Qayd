@@ -16,7 +16,8 @@ Output: no greetings or filler. Max 3 bullets of explanation. One-line summary b
 - The shell (direction A) is approved. Never rebuild it; extend it.
 - Session start: read .claude/session-handoff.md and docs/repo-map.md only.
 - Session end: rewrite .claude/session-handoff.md (max 25 lines): state, decisions, open issues, next step.
-- Version: bump VERSION_NAME in gradle.properties + version.json + docs/releases/vX.Y.Z.md on substantive changes.
+- Version: bump VERSION_NAME in gradle.properties + version.json on substantive changes.
+- Every push to main publishes a Release vX.Y.Z-bN. Keep docs/releases/vX.Y.Z.md current with three Arabic sections: الإضافات / المميزات / الإصلاحات. Commit subjects are listed automatically, so write them clearly.
 
 ## Stack
 - Native Android: Kotlin + Jetpack Compose, minSdk 26, targetSdk 36. No WebView, no WebToApp.

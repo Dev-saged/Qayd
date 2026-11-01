@@ -1,6 +1,7 @@
 # يبني APK قيد مع كل رفع:
-# - Artifact في صفحة التشغيل، وتحديث إصدار "latest-build" التجريبي.
-# - كل VERSION_NAME في gradle.properties يصير إصداراً مستقلاً vX.Y.Z بملاحظات docs/releases/vX.Y.Z.md.
+# - كل فرع: Artifact في صفحة التشغيل.
+# - main: كل بناء يُنشر Release مستقلاً vX.Y.Z-bN، ملاحظاته من docs/releases/vX.Y.Z.md
+#   (الإضافات / المميزات / الإصلاحات) + قائمة تغييرات هذا البناء منذ الإصدار السابق.
 # التوقيع: أسرار KEYSTORE_BASE64 و SIGNING_STORE_PASSWORD و SIGNING_KEY_ALIAS و SIGNING_KEY_PASSWORD.
 # بدونها يُوقَّع بمفتاح مؤقت (يثبت، لكن التحديث فوقه يحتاج حذف النسخة السابقة).
 name: Build Qayd APK
@@ -25,9 +26,11 @@ jobs:
       KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -56,11 +59,9 @@ jobs:
         run: |
           VERSION=$(grep '^VERSION_NAME=' gradle.properties | cut -d= -f2)
           mkdir -p dist
-          cp app/build/outputs/apk/release/*.apk "dist/Qayd-v${VERSION}-build${GITHUB_RUN_NUMBER}.apk"
-          cp app/build/outputs/apk/release/*.apk "dist/Qayd-latest.apk"
-          cp app/build/outputs/apk/release/*.apk "dist/Qayd-v${VERSION}.apk"
+          cp app/build/outputs/apk/release/*.apk "dist/Qayd-v${VERSION}-b${GITHUB_RUN_NUMBER}.apk"
           if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::warning::No signing secrets set — APK signed with a temporary key."
+            echo "::warning::No signing secrets set — APK signed with a temporary key; no Release is published."
           fi
           ls -l dist
 
@@ -76,31 +77,29 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Qayd-APK-${{ github.run_number }}
-          path: dist/Qayd-v*-build*.apk
+          path: dist/Qayd-v*-b*.apk
           if-no-files-found: error
 
-      - name: Update "latest-build" release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: latest-build
-          name: قيد — آخر نسخة تجريبية
-          body: آخر APK تم بناؤه تلقائياً من الفرع ${{ github.ref_name }} (build ${{ github.run_number }}).
-          prerelease: true
-          files: dist/Qayd-latest.apk
-
-      - name: Publish version release
-        if: github.ref_name == 'main'
+      - name: Publish build release
+        # لا Release بمفتاح مؤقت: لن يُثبَّت فوق النسخ الموقّعة
+        if: github.ref_name == 'main' && env.KEYSTORE_BASE64 != ''
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           VERSION=$(grep '^VERSION_NAME=' gradle.properties | cut -d= -f2)
-          TAG="v$VERSION"
-          NOTES="docs/releases/$TAG.md"
-          if [ ! -f "$NOTES" ]; then echo "## قيد $VERSION" > /tmp/notes.md; NOTES=/tmp/notes.md; fi
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "dist/Qayd-$TAG.apk" --clobber
-            gh release edit "$TAG" --title "قيد $VERSION" --notes-file "$NOTES" --latest
-          else
-            gh release create "$TAG" "dist/Qayd-$TAG.apk" --title "قيد $VERSION" --notes-file "$NOTES" --target "$(git rev-parse HEAD)" --latest
-          fi
+          TAG="v${VERSION}-b${GITHUB_RUN_NUMBER}"
+          PREV=$(git tag --list 'v*' --sort=-creatordate | grep -v "^$TAG$" | head -n1)
+          {
+            echo "# قيد $VERSION — بناء $GITHUB_RUN_NUMBER"
+            echo
+            if [ -f "docs/releases/v$VERSION.md" ]; then cat "docs/releases/v$VERSION.md"; echo; fi
+            echo "## تغييرات هذا البناء"
+            if [ -n "$PREV" ]; then RANGE="$PREV..HEAD"; else RANGE="HEAD"; fi
+            git log --no-merges --pretty='- %s' $RANGE
+          } > /tmp/notes.md
+          cat /tmp/notes.md
+          gh release delete latest-build --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" "dist/Qayd-$TAG.apk" \
+            --title "قيد $VERSION — بناء $GITHUB_RUN_NUMBER" \
+            --notes-file /tmp/notes.md --target "$(git rev-parse HEAD)" --latest

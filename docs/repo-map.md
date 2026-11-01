@@ -19,8 +19,12 @@
 ## Local build
 - `ROBOLECTRIC_DEPS_DIR` (optional): folder holding android-all-instrumented jar for offline Robolectric.
 
+## Signing & releases
+- Release key alias `sajed-qayd-ps` (CN=Sajed Al-Abadla, O=Qayd PS, C=PS). Keystore never in repo; CI reads it from secrets, locally from gitignored keystore.properties.
+- CI publishes a Release per main build: tag vX.Y.Z-bN, notes = docs/releases/vX.Y.Z.md + commits since previous tag.
+
 ## Changes
-- v0.1.0: shell + home (direction A), icon, CI.
+- v0.1.0: shell + home (direction A), icon, CI, per-build releases.
 
 ## Solved bugs
 - Signed amounts flipped ("300+") inside RTL text → wrap in LTR isolate (`ltr()` in HomeScreen).

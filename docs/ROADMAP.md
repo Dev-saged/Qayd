@@ -25,6 +25,8 @@
 
 ## مطلوب من ساجد
 
-- [ ] مشروع Firebase (Auth: Email/Password + Firestore) وملف google-services.json — قبل المرحلة 1
-- [ ] حساب Cloudflare (مجاني) — قبل المرحلة 1
-- [ ] أسرار التوقيع في GitHub — قبل أول تثبيت فعلي حتى تنزل التحديثات فوق بعضها
+- [ ] مشروع Firebase `qayd-ps` (Auth: Email/Password + Firestore) وملف google-services.json — قبل المرحلة 1
+- [x] حساب Cloudflare مربوط (قراءة)
+- [ ] رمز Cloudflare API (Edit Cloudflare Workers) كسر `CLOUDFLARE_API_TOKEN` — لنشر Worker إنشاء الموظفين
+- [x] مفتاح التوقيع `sajed-qayd-ps` مولّد
+- [ ] أسرار التوقيع الأربعة في GitHub (يضيفها ساجد يدوياً)
