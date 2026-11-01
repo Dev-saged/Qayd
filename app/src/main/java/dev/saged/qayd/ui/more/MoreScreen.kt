@@ -62,6 +62,7 @@ fun MoreScreen(
     onAddStaff: (String, String, String) -> Unit,
     onClearOp: () -> Unit,
     onSignOut: () -> Unit,
+    onExpenses: (() -> Unit)? = null,
 ) {
     val p = LocalPalette.current
     var sheet by rememberSaveable { mutableStateOf<MoreSheet?>(null) }
@@ -92,6 +93,7 @@ fun MoreScreen(
         }
 
         Column(Modifier.entrance(2).fillMaxWidth().clip(shape).background(p.surface).border(1.dp, p.line, shape).padding(6.dp)) {
+            if (onExpenses != null) ActionRow(QIcons.Wallet, "المصروفات", "بضاعة، إنترنت، كهرباء، إيجار، ودفعات شهرية ثابتة", onClick = onExpenses)
             if (owner) {
                 ActionRow(QIcons.Edit, "اسم المحل", shop.name) { onClearOp(); sheet = MoreSheet.Rename }
                 ActionRow(QIcons.UserPlus, "إضافة موظف", "حساب دخول جديد على نطاق ⁦@${shop.suffix}⁩") { onClearOp(); sheet = MoreSheet.Staff }

@@ -14,6 +14,12 @@ object BrandConfig {
     /** دقائق قبل نهاية الجلسة يبدأ عندها تنبيه "قرب الانتهاء". */
     const val PS_WARN_MINUTES = 20
 
+    /** أزرار الإضافة السريعة في النمباد. */
+    val QUICK_ADDS = listOf(5, 10, 20, 50)
+
+    /** أيام بلا دفعة يصبح بعدها الزبون المدين متأخراً. */
+    const val OVERDUE_DAYS = 30
+
     /** كل لون زوج [فاتح، داكن] بصيغة OKLCH: إضاءة 0..1، تشبّع، زاوية. */
     data class Tone(val light: Oklch, val dark: Oklch)
     data class Oklch(val l: Float, val c: Float, val h: Float)

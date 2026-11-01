@@ -1,5 +1,19 @@
 package dev.saged.qayd.ui.shell
 
+import androidx.activity.compose.BackHandler
+import dev.saged.qayd.data.AmountInput
+import dev.saged.qayd.data.Customer
+import dev.saged.qayd.data.ExpenseCategory
+import dev.saged.qayd.data.Ledger
+import dev.saged.qayd.data.Tx
+import dev.saged.qayd.data.TxKind
+import dev.saged.qayd.ui.components.NumpadSheet
+import dev.saged.qayd.ui.components.PadChip
+import dev.saged.qayd.ui.components.QSheet
+import dev.saged.qayd.ui.customers.CustomerPage
+import dev.saged.qayd.ui.customers.CustomersScreen
+import dev.saged.qayd.ui.expenses.ExpensesPage
+import dev.saged.qayd.ui.util.balanceText
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -52,7 +66,6 @@ import dev.saged.qayd.data.Account
 import dev.saged.qayd.data.Shop
 import dev.saged.qayd.data.SyncState
 import dev.saged.qayd.ui.components.Ambient
-import dev.saged.qayd.ui.home.HomeSummary
 import dev.saged.qayd.ui.home.PsSlot
 import dev.saged.qayd.ui.components.QIcon
 import dev.saged.qayd.ui.components.Silk
@@ -69,39 +82,132 @@ enum class Tab(val label: String, val icon: ImageVector) {
     More("المزيد", QIcons.More),
 }
 
+private sealed interface Page {
+    data class CustomerDetail(val id: String) : Page
+    data object Expenses : Page
+}
+
 @Composable
 fun QaydShell(
     shop: Shop,
     account: Account,
     sync: SyncState,
-    summary: HomeSummary,
+    ledger: Ledger,
     slots: List<PsSlot>,
-    more: @Composable (PaddingValues) -> Unit,
+    actions: ShopActions,
+    more: @Composable (PaddingValues, () -> Unit) -> Unit,
 ) {
     val p = LocalPalette.current
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
+    var page by remember { mutableStateOf<Page?>(null) }
+    var pad by remember { mutableStateOf<PadRequest?>(null) }
+    var picking by remember { mutableStateOf<TxKind?>(null) }
+    var newAction by rememberSaveable { mutableStateOf(false) }
+    var addingCustomer by rememberSaveable { mutableStateOf(false) }
+    var confirm by remember { mutableStateOf<Tx?>(null) }
+    val owner = account.role == dev.saged.qayd.data.Role.Owner
     val top = WindowInsets.statusBars.asPaddingValues()
+    val pad0 = PaddingValues(top = top.calculateTopPadding())
+
+    BackHandler(page != null) { page = null }
 
     Box(Modifier.fillMaxSize().background(p.bg)) {
         Ambient()
         Column(Modifier.fillMaxSize()) {
             AnimatedContent(
-                targetState = tab,
+                targetState = page to tab,
                 modifier = Modifier.weight(1f),
                 transitionSpec = { fadeIn(tween(220, easing = Silk)) togetherWith fadeOut(tween(120)) },
-                label = "tab",
-            ) { t ->
-                val pad = PaddingValues(top = top.calculateTopPadding())
-                when (t) {
-                    Tab.Home -> HomeScreen(pad, shop, account, sync, summary, slots)
-                    Tab.Customers -> EmptyTab(pad, QIcons.Users, "لا يوجد زبائن بعد", "أضف أول زبون من زر الإضافة، وسيظهر رصيده وسجله هنا.")
-                    Tab.Messages -> EmptyTab(pad, QIcons.Msg, "طابور الرسائل فارغ", "كل رسالة تُرسل لمدين أو مشترك تظهر هنا بحالتها: بالانتظار، أُرسلت، وصلت.")
-                    Tab.More -> more(pad)
+                label = "screen",
+            ) { (pg, t) ->
+                when (pg) {
+                    is Page.CustomerDetail -> {
+                        // زبون أُضيف للتو يظهر مع أول تحديث للمستمع
+                        val c = ledger.balanceOf(pg.id)?.customer
+                        if (c != null) {
+                            CustomerPage(
+                                pad0, c, ledger, onBack = { page = null },
+                                onDebt = { pad = PadRequest.Debt(c) }, onPayment = { pad = PadRequest.Payment(c) },
+                                onTxTap = { confirm = it },
+                            )
+                        }
+                    }
+                    Page.Expenses -> ExpensesPage(
+                        pad0, ledger, onBack = { page = null }, onAdd = { pad = PadRequest.Expense() },
+                        onPay = { pad = PadRequest.Expense(it) },
+                        onAddRecurring = actions.addRecurring, onDeleteRecurring = actions.deleteRecurring,
+                        onTxTap = { confirm = it },
+                    )
+                    null -> when (t) {
+                        Tab.Home -> HomeScreen(pad0, shop, account, sync, ledger, slots, onQuickSale = { pad = PadRequest.Sale }, onTxTap = { confirm = it })
+                        Tab.Customers -> CustomersScreen(pad0, ledger, onOpen = { page = Page.CustomerDetail(it.id) }, onAdd = { addingCustomer = true })
+                        Tab.Messages -> EmptyTab(pad0, QIcons.Msg, "طابور الرسائل فارغ", "كل رسالة تُرسل لمدين أو مشترك تظهر هنا بحالتها: بالانتظار، أُرسلت، وصلت.")
+                        Tab.More -> more(pad0) { page = Page.Expenses }
+                    }
                 }
             }
-            BottomBar(tab) { tab = it }
+            BottomBar(tab) { tab = it; page = null }
         }
-        Fab(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().offset(y = (-34).dp))
+        Fab(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().offset(y = (-34).dp)) { newAction = true }
+    }
+
+    if (newAction) {
+        NewActionSheet(owner, onPick = { k ->
+            newAction = false
+            when (k) {
+                TxKind.Sale -> pad = PadRequest.Sale
+                TxKind.Expense -> pad = PadRequest.Expense()
+                else -> picking = k
+            }
+        }) { newAction = false }
+    }
+
+    picking?.let { k ->
+        CustomerPickerSheet(
+            title = if (k == TxKind.Debt) "دين على زبون" else "دفعة من زبون",
+            customers = ledger.customers,
+            onPick = { c -> picking = null; pad = if (k == TxKind.Debt) PadRequest.Debt(c) else PadRequest.Payment(c) },
+            onCreate = { n, ph ->
+                val c = Customer(actions.addCustomer(n, ph), n.trim(), ph.trim(), "", System.currentTimeMillis())
+                picking = null
+                pad = if (k == TxKind.Debt) PadRequest.Debt(c) else PadRequest.Payment(c)
+            },
+        ) { picking = null }
+    }
+
+    if (addingCustomer) {
+        QSheet("زبون جديد", { addingCustomer = false }) {
+            NewCustomerForm { n, ph ->
+                val id = actions.addCustomer(n, ph)
+                addingCustomer = false
+                page = Page.CustomerDetail(id)
+            }
+        }
+    }
+
+    when (val r = pad) {
+        PadRequest.Sale -> NumpadSheet("بيع سريع", "يُسجل كبيع للمحل مباشرة", p.ok, "سجّل البيع", onDismiss = { pad = null }) { v, _ -> actions.sale(v) }
+        is PadRequest.Debt -> NumpadSheet(
+            "دين على ${r.customer.name}", balanceText(ledger.balanceOf(r.customer.id)?.balance ?: 0.0, p).first,
+            p.danger, "أضف الدين", onDismiss = { pad = null },
+        ) { v, _ -> actions.debt(r.customer.id, v) }
+        is PadRequest.Payment -> NumpadSheet(
+            "دفعة من ${r.customer.name}", balanceText(ledger.balanceOf(r.customer.id)?.balance ?: 0.0, p).first,
+            p.ok, "سجّل الدفعة", onDismiss = { pad = null },
+        ) { v, _ -> actions.payment(r.customer.id, v) }
+        is PadRequest.Expense -> NumpadSheet(
+            title = r.recurring?.item?.title ?: "مصروف",
+            subtitle = r.recurring?.let { "${it.item.category.label} · دفعة هذا الشهر" },
+            accent = p.pri, confirm = "سجّل المصروف",
+            initial = AmountInput.of(r.recurring?.lastAmount),
+            chips = if (r.recurring == null) ExpenseCategory.entries.map { PadChip(it.key, it.label) } else emptyList(),
+            onDismiss = { pad = null },
+        ) { v, chip -> actions.expense(r.recurring?.item?.category ?: ExpenseCategory.of(chip), v, r.recurring?.item?.id) }
+        null -> Unit
+    }
+
+    confirm?.let { t ->
+        ConfirmDeleteSheet(t, t.customerId?.let { ledger.balanceOf(it)?.customer?.name }, onDelete = { actions.deleteTx(t.id) }) { confirm = null }
     }
 }
 
@@ -145,7 +251,7 @@ private fun BottomBar(current: Tab, onSelect: (Tab) -> Unit) {
 }
 
 @Composable
-private fun Fab(modifier: Modifier) {
+private fun Fab(modifier: Modifier, onClick: () -> Unit) {
     val p = LocalPalette.current
     val haptic = LocalHapticFeedback.current
     val source = remember { MutableInteractionSource() }
@@ -157,12 +263,13 @@ private fun Fab(modifier: Modifier) {
             .size(60.dp)
             .clip(shape)
             .background(Brush.linearGradient(listOf(p.pri, lerp(p.pri, Color.Black, .4f))))
-            .clickable(source, indication = null, role = Role.Button, onClickLabel = "حركة جديدة") {
+            .clickable(source, indication = null, role = Role.Button, onClickLabel = "عملية جديدة") {
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                onClick()
             },
         contentAlignment = Alignment.Center,
     ) {
-        QIcon(QIcons.Plus, p.onPri, Modifier.size(26.dp), "حركة جديدة")
+        QIcon(QIcons.Plus, p.onPri, Modifier.size(26.dp), "عملية جديدة")
     }
 }
 

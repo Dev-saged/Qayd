@@ -46,6 +46,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.saged.qayd.config.BrandConfig
 import dev.saged.qayd.data.Account
+import dev.saged.qayd.data.Ledger
+import dev.saged.qayd.data.Tx
 import dev.saged.qayd.data.Module
 import dev.saged.qayd.data.Shop
 import dev.saged.qayd.data.SyncState
@@ -60,12 +62,11 @@ import dev.saged.qayd.ui.components.rememberNow
 import dev.saged.qayd.ui.components.rememberPulse
 import dev.saged.qayd.ui.icons.QIcons
 import dev.saged.qayd.ui.theme.LocalPalette
+import dev.saged.qayd.ui.util.clock
+import dev.saged.qayd.ui.util.ltr
+import dev.saged.qayd.ui.util.cur
+import dev.saged.qayd.ui.util.money
 import java.util.Locale
-
-/** عزل LTR حتى لا تنقلب الإشارة والعملة داخل سطر عربي. */
-private fun ltr(s: String) = "⁦$s⁩"
-private fun money(v: Long) = String.format(Locale.US, "%,d", v)
-private fun money(v: Double) = if (v % 1.0 == 0.0) money(v.toLong()) else String.format(Locale.US, "%,.1f", v)
 
 @Composable
 fun HomeScreen(
@@ -73,10 +74,11 @@ fun HomeScreen(
     shop: Shop,
     account: Account,
     sync: SyncState,
-    summary: HomeSummary,
+    ledger: Ledger,
     initialSlots: List<PsSlot>,
+    onQuickSale: () -> Unit,
+    onTxTap: (Tx) -> Unit,
 ) {
-    val p = LocalPalette.current
     val haptic = LocalHapticFeedback.current
     val now by rememberNow()
     val slots = remember(initialSlots) { mutableStateListOf(*initialSlots.toTypedArray()) }
@@ -91,31 +93,78 @@ fun HomeScreen(
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Header(shop, account, sync, Modifier.entrance(0))
-        Hero(summary, hidden, onToggle = { hidden = !hidden }, modifier = Modifier.entrance(1))
+        Hero(ledger, hidden, onToggle = { hidden = !hidden }, modifier = Modifier.entrance(1))
+        QuickSale(ledger, Modifier.entrance(2), onQuickSale, onTxTap)
 
         if (Module.Ps in shop.modules && slots.isNotEmpty()) {
             val running = slots.count { it.startedAt != null }
-            SectionTitle("الشاشات", "$running من ${slots.size} قيد التشغيل", Modifier.entrance(2))
-            PsGrid(slots, now, Modifier.entrance(3)) { i, start ->
+            SectionTitle("الشاشات", "$running من ${slots.size} قيد التشغيل", Modifier.entrance(3))
+            PsGrid(slots, now, Modifier.entrance(4)) { i, start ->
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 slots[i] = slots[i].copy(startedAt = start)
             }
         }
 
-        Row(Modifier.entrance(4), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            MiniStat("متأخرون", summary.late.toString(), Modifier.weight(1f))
-            if (Module.Electricity in shop.modules) MiniStat("قراءات معلّقة", summary.pendingReadings.toString(), Modifier.weight(1f))
-            if (Module.Sms in shop.modules) GatewayStat(summary.gatewayOnline, Modifier.weight(1f))
-        }
-
-        SectionTitle("آخر الحركات", "الكل", Modifier.entrance(5))
-        Column(Modifier.entrance(6)) {
-            if (summary.recent.isEmpty()) {
-                T("لا توجد حركات بعد. أول دين أو دفعة تسجّلها تظهر هنا.", Modifier.padding(vertical = 18.dp), 13.5.sp, color = p.mute, maxLines = 2)
-            }
-            summary.recent.forEach { ActivityRow(it) }
+        Row(Modifier.entrance(5), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            MiniStat("متأخرون", ledger.late.toString(), Modifier.weight(1f))
+            MiniStat("الزبائن", ledger.customers.size.toString(), Modifier.weight(1f))
+            if (Module.Sms in shop.modules) GatewayStat(false, Modifier.weight(1f))
         }
         Spacer(Modifier.height(96.dp))
+    }
+}
+
+/** البيع السريع: مبيعات اليوم وزر بيع يفتح النمباد مباشرة. */
+@Composable
+private fun QuickSale(l: Ledger, modifier: Modifier, onSale: () -> Unit, onTxTap: (Tx) -> Unit) {
+    val p = LocalPalette.current
+    val shape = RoundedCornerShape(24.dp)
+    val source = remember { MutableInteractionSource() }
+    Column(modifier.fillMaxWidth().clip(shape).background(p.surface).border(1.dp, p.line, shape).padding(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                T("مبيعات اليوم", size = 13.sp, color = p.mute)
+                T(cur(l.todaySales), size = 26.sp, weight = FontWeight.SemiBold)
+                T(if (l.todaySalesCount == 0) "لا مبيعات بعد" else "${l.todaySalesCount} عملية بيع", size = 12.sp, color = p.mute)
+            }
+            Row(
+                Modifier
+                    .pressScale(source, .94f)
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(Brush.linearGradient(listOf(p.pri, lerp(p.pri, Color.Black, .35f))))
+                    .clickable(source, indication = null, role = Role.Button, onClick = onSale)
+                    .padding(horizontal = 18.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                QIcon(QIcons.Cart, p.onPri, Modifier.size(22.dp))
+                Spacer(Modifier.width(8.dp))
+                T("سجّل بيع", size = 15.sp, weight = FontWeight.SemiBold, color = p.onPri)
+            }
+        }
+        if (l.todaySalesList.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            l.todaySalesList.take(5).forEach { t ->
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(12.dp))
+                        .clickable(role = Role.Button, onClickLabel = "خيارات") { onTxTap(t) }
+                        .drawWithContent {
+                            drawContent()
+                            drawLine(p.line, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx())
+                        }
+                        .padding(vertical = 10.dp, horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    T(clock(t.at), size = 12.5.sp, color = p.mute)
+                    T(t.byName, Modifier.weight(1f).padding(horizontal = 10.dp), 12.5.sp, color = p.mute)
+                    if (t.pending) Box(Modifier.padding(end = 8.dp).size(6.dp).clip(CircleShape).background(p.warn))
+                    T(cur(t.amount), size = 14.5.sp, weight = FontWeight.SemiBold, color = p.ok)
+                }
+            }
+        } else {
+            T("المبلغ فقط من لوحة الأرقام، بدون كيبورد الجوال.", Modifier.padding(top = 10.dp), 12.5.sp, color = p.mute, maxLines = 2)
+        }
     }
 }
 
@@ -145,20 +194,12 @@ private fun Header(shop: Shop, account: Account, sync: SyncState, modifier: Modi
             contentAlignment = Alignment.Center,
         ) {
             QIcon(QIcons.Bell, p.ink, Modifier.size(22.dp), "الإشعارات")
-            Box(
-                Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 10.dp, end = 11.dp)
-                    .size(8.dp)
-                    .clip(CircleShape)
-                    .background(p.danger),
-            )
         }
     }
 }
 
 @Composable
-private fun Hero(s: HomeSummary, hidden: Boolean, onToggle: () -> Unit, modifier: Modifier) {
+private fun Hero(s: Ledger, hidden: Boolean, onToggle: () -> Unit, modifier: Modifier) {
     val p = LocalPalette.current
     val shape = RoundedCornerShape(24.dp)
     Column(
@@ -193,16 +234,17 @@ private fun Hero(s: HomeSummary, hidden: Boolean, onToggle: () -> Unit, modifier
             Spacer(Modifier.width(8.dp))
             T(BrandConfig.CURRENCY, Modifier.padding(bottom = 8.dp), 18.sp, FontWeight.Medium, p.pri)
         }
-        if (s.collectedToday > 0) {
+        if (s.todayCollected > 0) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 QIcon(QIcons.Down, p.ok, Modifier.size(16.dp))
                 Spacer(Modifier.width(6.dp))
-                T("انخفض ${ltr(money(s.collectedToday) + " " + BrandConfig.CURRENCY)} بتحصيل اليوم", size = 12.5.sp, color = p.ok)
+                T("انخفض ${cur(s.todayCollected)} بتحصيل اليوم", size = 12.5.sp, color = p.ok)
             }
         } else {
             T("لا تحصيل اليوم بعد", size = 12.5.sp, color = p.mute)
         }
-        if (s.trend.size >= 2) Sparkline(s.trend, p.pri, Modifier.fillMaxWidth().height(46.dp).padding(top = 8.dp))
+        if (s.totalCredit > 0) T("للزبائن رصيد مقدم ${cur(s.totalCredit)}", size = 12.sp, color = p.mute)
+        if (s.debtTrend.size >= 2) Sparkline(s.debtTrend, p.pri, Modifier.fillMaxWidth().height(46.dp).padding(top = 8.dp))
     }
 }
 
@@ -326,44 +368,5 @@ private fun GatewayStat(online: Boolean, modifier: Modifier) {
             Spacer(Modifier.width(6.dp))
             T(if (online) "متصل" else "متوقف", size = 13.sp, weight = FontWeight.SemiBold, color = c)
         }
-    }
-}
-
-@Composable
-private fun ActivityRow(a: Activity) {
-    val p = LocalPalette.current
-    val positive = a.kind == ActivityKind.Payment
-    val c = if (positive) p.ok else p.danger
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .drawWithContent {
-                drawContent()
-                drawLine(p.line, Offset(0f, size.height), Offset(size.width, size.height), 1.dp.toPx())
-            }
-            .padding(vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(
-            Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(p.surface2),
-            contentAlignment = Alignment.Center,
-        ) {
-            QIcon(
-                when (a.kind) {
-                    ActivityKind.Payment -> QIcons.Down
-                    ActivityKind.Debt -> QIcons.Up
-                    ActivityKind.Session -> QIcons.Clock
-                },
-                c, Modifier.size(18.dp),
-            )
-        }
-        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-            T(a.name, size = 14.sp)
-            T(a.note, size = 11.5.sp, color = p.mute)
-        }
-        T(
-            ltr((if (positive) "+" else "−") + money(a.amount) + " " + BrandConfig.CURRENCY),
-            size = 14.5.sp, weight = FontWeight.SemiBold, color = c,
-        )
     }
 }

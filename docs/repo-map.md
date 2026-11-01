@@ -12,10 +12,12 @@
   - `ui/AppViewModel.kt` — Session (Loading/SignedOut/Active), Op state for network actions.
   - `ui/AppRoot.kt` — routing: Login → AdminScreen (super admin) or ShopRoot (QaydShell / Blocked).
   - `ui/auth/LoginScreen.kt`, `ui/admin/AdminScreen.kt` (shops list, create shop sheet, toggle active), `ui/more/MoreScreen.kt` (account, rename shop, add staff, sign out).
-  - `ui/components/Forms.kt` (QField, QButton, QSwitchRow, QStepper, QNotice), `Chrome.kt` (SyncChip, IconTile, ActionRow, QSheet).
-  - `ui/shell/QaydShell.kt` — tabs, bottom bar with center FAB; takes shop/account/sync/summary/slots + More slot.
-  - `ui/home/HomeModels.kt` — UI models, HomeSummary.Empty, idleSlots, SampleHome (tests/preview).
-  - `ui/home/HomeScreen.kt` — header + SyncChip, debt hero, PsGrid (module ps, N screens), module-aware KPIs, recent activity / empty state.
+  - `ui/components/Forms.kt` (QField, QButton, QSwitchRow, QStepper, QNotice), `Chrome.kt` (SyncChip, IconTile, ActionRow, QSheet), `Numpad.kt` (NumpadBody/NumpadSheet: in-app keypad, never the system keyboard).
+  - `data/Ledger.kt` — TxKind, ExpenseCategory, Customer, Tx, Recurring, Ledger.of (derived balances, late, today sales/collected, month expenses, recurring paid status, 14-day debt trend), AmountInput.
+  - `ui/customers/` (CustomersScreen list/search/sort, CustomerPage balance + history), `ui/expenses/ExpensesPage.kt` (month by category, recurring monthly payments), `ui/shell/ShellSheets.kt` (ShopActions, PadRequest, new-action sheet, customer picker, delete confirm), `ui/util/Format.kt` (money, cur, ltr, dates, norm).
+  - `ui/shell/QaydShell.kt` — tabs + pages (customer, expenses), numpad host, FAB action sheet; takes shop/account/sync/ledger/slots/actions + More slot.
+  - `ui/home/HomeModels.kt` — PsSlot, idleSlots, SampleHome.slots.
+  - `ui/home/HomeScreen.kt` — header + SyncChip, debt hero from Ledger, QuickSale card (today's sales, "سجّل بيع"), PsGrid, KPIs.
 - `app/google-services.json` — Firebase client config (public by design; security is in rules).
 - `backend/firestore.rules` — shop isolation by claims, owner-only rename, members guarded, module data requires active shop.
 - `backend/worker/` — `qayd-admin` Worker (https://qayd-admin.dev-mr07.workers.dev): POST /v1/shops (super), POST /v1/staff (owner/super). Secret FIREBASE_SA.
@@ -26,8 +28,11 @@
 - `shops/{id}`: name, suffix, active, licenseUntil, modules{debts,ps,electricity,sms}, psScreens, ownerUid, currency, createdAt, updatedAt.
 - `shops/{id}/members/{uid}`: username, displayName, role(owner|staff), perms{}, active.
 - `suffixes/{suffix}`: shopId (uniqueness). Claims: super_admin | shopId + role.
+- `shops/{id}/customers/{cid}`: name, phone, note, by, byName, deleted, createdAt, updatedAt.
+- `shops/{id}/tx/{tid}`: kind(sale|debt|payment|expense), amount, at, customerId?, category?, recurringId?, period?(YYYY-MM), by, byName, deleted.
+- `shops/{id}/recurring/{rid}`: title, category, day, deleted.
 - `app/src/main/res/` — adaptive icon (vector ق mark), splash theme, Readex fonts.
-- `brand/` — master mark SVG + 1024 PNG.
+- `brand/` — master mark SVG + 1024 PNG; `brand/tools/make_icon.py` regenerates the seal icon (SVG + adaptive foreground/background/monochrome).
 - `docs/SPEC.md` — requirements, decisions, permissions. `docs/screens/` — current snapshots.
 - `prototype/home-directions.html` — the three static directions (A approved).
 
@@ -41,6 +46,7 @@
 ## Changes
 - v0.1.0: shell + home (direction A), icon, CI, per-build releases.
 - v0.2.0: Firebase auth + offline session, super admin panel, staff creation, shop rename, sync chip, Worker + rules.
+- v0.3.0: quick sale + in-app numpad, customers/debts/customer page, expenses + recurring monthly payments, seal icon, keys in private repo.
 
 ## Local build notes
 - Maven Central rate-limits this sandbox: ~/.gradle/init.d/central-mirror.gradle routes to Google's Central mirror (local only).

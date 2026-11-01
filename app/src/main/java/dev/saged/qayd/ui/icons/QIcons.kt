@@ -63,5 +63,14 @@ object QIcons {
         "M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M18 8v6M15 11h6" to W,
     )
     val Edit = icon("edit", "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" to W)
+    val Backspace = icon("backspace", "M21 6H9l-6 6 6 6h12a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1zM11.5 9.5l5 5M16.5 9.5l-5 5" to W)
+    val Cart = icon("cart", "M3 4h2l2.2 10.2a1 1 0 0 0 1 .8h9.3a1 1 0 0 0 1-.8L20 8H6.2" to W, "M10 19.5h.01M17 19.5h.01" to 3f)
+    val Wallet = icon("wallet", "M4 7a2 2 0 0 1 2-2h12v4M4 7v11a2 2 0 0 0 2 2h14V9H6a2 2 0 0 1-2-2zM16 14.5h.01" to W)
+    val Receipt = icon("receipt", "M6 3h12v18l-3-2-3 2-3-2-3 2zM9 8h6M9 12h6M9 16h3" to W)
+    val Back = icon("back", "M9 5l7 7-7 7" to W)
+    val Phone = icon("phone", "M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a1 1 0 0 1-1 1A16 16 0 0 1 4 5a1 1 0 0 1 1-1z" to W)
+    val Search = icon("search", "M17 11a6 6 0 1 1-12 0a6 6 0 1 1 12 0M20 20l-4.3-4.3" to W)
+    val Trash = icon("trash", "M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" to W)
+    val Calendar = icon("calendar", "M4 6a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1zM4 10h16M8 3v4M16 3v4" to W)
     val Sync = icon("sync", "M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4" to W)
 }

@@ -21,7 +21,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.saged.qayd.config.BrandConfig
 import dev.saged.qayd.data.Account
+import dev.saged.qayd.data.Ledger
+import dev.saged.qayd.data.TxKind
+import dev.saged.qayd.ui.components.rememberNow
+import dev.saged.qayd.ui.shell.ShopActions
 import dev.saged.qayd.data.Role
 import dev.saged.qayd.data.Shop
 import dev.saged.qayd.data.SyncState
@@ -32,7 +37,6 @@ import dev.saged.qayd.ui.components.QButton
 import dev.saged.qayd.ui.components.QIcon
 import dev.saged.qayd.ui.components.T
 import dev.saged.qayd.ui.components.rememberPulse
-import dev.saged.qayd.ui.home.HomeSummary
 import dev.saged.qayd.ui.home.idleSlots
 import dev.saged.qayd.ui.icons.QIcons
 import dev.saged.qayd.ui.more.MoreScreen
@@ -84,17 +88,45 @@ private fun ShopRoot(vm: AppViewModel, account: Account) {
         else -> {
             val op by vm.adminOp.collectAsStateWithLifecycle()
             val slots = remember(shop.psScreens) { idleSlots(shop.psScreens) }
-            QaydShell(shop, account, current.second, HomeSummary.Empty, slots) { pad ->
+            val ledger = rememberLedger(vm, shop.id)
+            val actions = remember(shop.id) { shopActions(vm, shop.id) }
+            QaydShell(shop, account, current.second, ledger, slots, actions) { pad, openExpenses ->
                 MoreScreen(
                     padding = pad, shop = shop, account = account, sync = current.second, op = op,
                     onRename = { vm.repo.renameShop(shop.id, it) },
                     onAddStaff = vm::createStaff,
                     onClearOp = vm::clearOp,
                     onSignOut = vm::signOut,
+                    onExpenses = openExpenses.takeIf { account.role == Role.Owner },
                 )
             }
         }
     }
+}
+
+@Composable
+private fun rememberLedger(vm: AppViewModel, shopId: String): Ledger {
+    val customers by remember(shopId) { vm.repo.customers(shopId) }.collectAsStateWithLifecycle(emptyList())
+    val txs by remember(shopId) { vm.repo.txs(shopId) }.collectAsStateWithLifecycle(emptyList())
+    val recurring by remember(shopId) { vm.repo.recurring(shopId) }.collectAsStateWithLifecycle(emptyList())
+    val now by rememberNow()
+    val day = Ledger.dayStart(now)
+    return remember(customers, txs, recurring, day) {
+        Ledger.of(customers, txs, recurring, System.currentTimeMillis(), BrandConfig.OVERDUE_DAYS)
+    }
+}
+
+private fun shopActions(vm: AppViewModel, shopId: String) = vm.repo.let { r ->
+    ShopActions(
+        sale = { r.addTx(shopId, TxKind.Sale, it) },
+        debt = { c, v -> r.addTx(shopId, TxKind.Debt, v, customerId = c) },
+        payment = { c, v -> r.addTx(shopId, TxKind.Payment, v, customerId = c) },
+        expense = { cat, v, rec -> r.addTx(shopId, TxKind.Expense, v, category = cat, recurringId = rec) },
+        deleteTx = { r.deleteTx(shopId, it) },
+        addCustomer = { n, ph -> r.addCustomer(shopId, n, ph) },
+        addRecurring = { t, c, d -> r.addRecurring(shopId, t, c, d) },
+        deleteRecurring = { r.deleteRecurring(shopId, it) },
+    )
 }
 
 @Composable

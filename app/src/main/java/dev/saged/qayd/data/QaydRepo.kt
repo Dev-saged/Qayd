@@ -165,6 +165,80 @@ class QaydRepo(context: Context) {
         )
     }
 
+    /* ---------- الدفتر: زبائن، حركات، مصروفات ثابتة ---------- */
+
+    private fun <T> listen(path: String, map: (DocumentSnapshot) -> T?): Flow<List<T>> = callbackFlow {
+        val reg = db.collection(path).addSnapshotListener(MetadataChanges.INCLUDE) { s, e ->
+            if (e != null || s == null) return@addSnapshotListener
+            trySend(s.documents.filter { it.getBoolean("deleted") != true }.mapNotNull(map))
+        }
+        awaitClose { reg.remove() }
+    }
+
+    fun customers(shopId: String): Flow<List<Customer>> = listen("shops/$shopId/customers") {
+        Customer(it.id, it.getString("name").orEmpty(), it.getString("phone").orEmpty(), it.getString("note").orEmpty(), it.millis("createdAt"))
+    }
+
+    fun txs(shopId: String): Flow<List<Tx>> = listen("shops/$shopId/tx") {
+        val kind = TxKind.of(it.getString("kind")) ?: return@listen null
+        Tx(
+            id = it.id, kind = kind, amount = it.getDouble("amount") ?: 0.0, at = it.millis("at"),
+            customerId = it.getString("customerId"),
+            category = it.getString("category")?.let(ExpenseCategory::of),
+            recurringId = it.getString("recurringId"), period = it.getString("period"),
+            byName = it.getString("byName").orEmpty(), pending = it.metadata.hasPendingWrites(),
+        )
+    }
+
+    fun recurring(shopId: String): Flow<List<Recurring>> = listen("shops/$shopId/recurring") {
+        Recurring(it.id, it.getString("title").orEmpty(), ExpenseCategory.of(it.getString("category")), (it.getLong("day") ?: 1L).toInt())
+    }
+
+    private fun DocumentSnapshot.millis(field: String) =
+        (get(field) as? Timestamp)?.toDate()?.time ?: (getLong(field) ?: System.currentTimeMillis())
+
+    private fun stamp(): Map<String, Any?> {
+        val a = _account.value
+        return mapOf(
+            "by" to a?.uid, "byName" to a?.displayName,
+            "deleted" to false, "createdAt" to FieldValue.serverTimestamp(), "updatedAt" to FieldValue.serverTimestamp(),
+        )
+    }
+
+    /** الكتابة تُحفظ محلياً فوراً وتُرسل عند الاتصال؛ لا ننتظر الخادم. */
+    fun addTx(
+        shopId: String, kind: TxKind, amount: Double, customerId: String? = null,
+        category: ExpenseCategory? = null, recurringId: String? = null,
+    ) {
+        val now = System.currentTimeMillis()
+        db.collection("shops/$shopId/tx").document().set(
+            stamp() + mapOf(
+                "kind" to kind.key, "amount" to round2(amount), "at" to Timestamp(java.util.Date(now)),
+                "customerId" to customerId, "category" to category?.key,
+                "recurringId" to recurringId, "period" to if (recurringId != null) Ledger.period(now) else null,
+            ),
+        )
+    }
+
+    fun deleteTx(shopId: String, id: String) {
+        db.document("shops/$shopId/tx/$id").update(mapOf("deleted" to true, "updatedAt" to FieldValue.serverTimestamp()))
+    }
+
+    fun addCustomer(shopId: String, name: String, phone: String): String {
+        val ref = db.collection("shops/$shopId/customers").document()
+        ref.set(stamp() + mapOf("name" to name.trim(), "phone" to phone.trim(), "note" to ""))
+        return ref.id
+    }
+
+    fun addRecurring(shopId: String, title: String, category: ExpenseCategory, day: Int) {
+        db.collection("shops/$shopId/recurring").document()
+            .set(stamp() + mapOf("title" to title.trim(), "category" to category.key, "day" to day))
+    }
+
+    fun deleteRecurring(shopId: String, id: String) {
+        db.document("shops/$shopId/recurring/$id").update(mapOf("deleted" to true, "updatedAt" to FieldValue.serverTimestamp()))
+    }
+
     /* ---------- Worker الإدارة ---------- */
 
     suspend fun createShop(s: NewShop): String {

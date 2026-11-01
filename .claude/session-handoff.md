@@ -1,19 +1,19 @@
 # session-handoff
 
 ## State
-- v0.2.0 (phase 1 done): Firebase login with offline session, super admin panel (create/toggle shops), owner adds staff + renames shop, sync chip, module-aware home.
-- Backend live: Firestore rules deployed; Worker qayd-admin at https://qayd-admin.dev-mr07.workers.dev (secret FIREBASE_SA); smoke test 19/19 passing.
-- sajed@qayd.ps (uid hDdMcmxI3NPdSbWz55EkqN0PSI83) has super_admin claim.
+- v0.3.0: quick sale (in-app numpad), customers + debts + customer page, expenses + recurring monthly payments, seal icon.
+- v0.2.0 base: Firebase login/offline, super admin panel, staff creation, shop rename, sync chip.
+- Backend live: rules + Worker qayd-admin; smoke test passes. Keys in secrets/ (private repo); CI signs and releases every main build.
 
 ## Decisions
-- Name قيد / Qayd, package dev.saged.qayd, Firebase project qayd-ps (eur3), one project for all shops.
-- Login = username@suffix as Firebase email; client sign-up disabled; accounts only via Worker.
-- google-services.json committed (public config); service account + CF token never in repo.
-- Super Admin panel lives inside the app. Every main build → signed Release vX.Y.Z-bN with Arabic notes.
+- Name قيد / Qayd, package dev.saged.qayd, Firebase qayd-ps, one project for all shops.
+- Amounts only via in-app numpad (never the phone keyboard); names/search use the system keyboard.
+- Balance derived from tx (debt − payment); negative = credit for the customer.
+- Expenses UI is owner-only; Firestore rules still allow any shop member (tighten in v0.4.0 with perms).
 
 ## Open
-- Signing secrets must be added by Sajed in GitHub (no Release is published without them).
-- Home debt numbers/activity are empty until phase 2.
+- Staff permission matrix not enforced yet (rules + UI) — v0.4.0.
+- Customer statement / PDF — v0.8.0. PlayStation sessions still local-only — v0.5.0.
 
 ## Next step
-- Phase 2 (v0.3.0): customers, customer page, custom numpad, debt/payment/advance, derived balance, search, statement.
+- v0.4.0: team & permissions (matrix, enforce in rules), audit log, shifts.
