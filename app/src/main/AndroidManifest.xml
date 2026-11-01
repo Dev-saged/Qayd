@@ -37,6 +37,9 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
 
+    <!-- حفظ النسخ والفواتير في مجلد قيد (أندرويد 9 وأقدم) -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+
     <!-- التحديث الذاتي -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
@@ -63,6 +66,7 @@
         </activity>
 
         <receiver android:name=".notify.PsAlarmReceiver" android:exported="false" />
+        <receiver android:name=".system.InstallReceiver" android:exported="false" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

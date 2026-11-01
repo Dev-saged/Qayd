@@ -6,6 +6,7 @@
 - Keys in secrets/ (private repo). CI signs, releases, and publishes the APK to KV on every main build.
 
 ## Decisions
+- v1.2.0: permissions onboarding, session-based self-update (avoids Android restricted settings), Qayd folder for backups/invoices, premium PDF.
 - v1.1.0: Kufi icon (B2), theme mode, auto backup (paid-able), SMS monthly quota per shop (-1 unlimited), bulk segments, dev card.
 - SMS: Firestore queue + in-app gateway service (not LAN HTTP).
 - Self-update via Worker KV because the repo is private.

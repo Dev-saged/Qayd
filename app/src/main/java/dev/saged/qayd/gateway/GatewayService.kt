@@ -76,7 +76,12 @@ class GatewayService : Service() {
         val prefs = getSharedPreferences(PREFS, MODE_PRIVATE)
         shopId = intent?.getStringExtra(EXTRA_SHOP) ?: prefs.getString(EXTRA_SHOP, null) ?: run { stopSelf(); return START_NOT_STICKY }
         prefs.edit().putString(EXTRA_SHOP, shopId).putBoolean(KEY_ON, true).apply()
-        startInForeground()
+        val canSend = ContextCompat.checkSelfPermission(this, android.Manifest.permission.SEND_SMS) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!canSend || runCatching { startInForeground() }.isFailure) {
+            prefs.edit().putBoolean(KEY_ON, false).apply()
+            stopSelf()
+            return START_NOT_STICKY
+        }
         if (reg == null) listen()
         scope.launch {
             while (isActive) {

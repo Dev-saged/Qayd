@@ -127,7 +127,8 @@ fun MessagesScreen(
     val live = gateway.live(now)
     var filter by rememberSaveable { mutableStateOf<String?>(null) }
     var bulk by remember { mutableStateOf<Bulk?>(null) }
-    val askSms = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) onGateway(true) }
+    var restricted by remember { mutableStateOf(false) }
+    val askSms = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok -> if (ok) onGateway(true) else restricted = true }
     val today = Ledger.dayStart(now)
 
     LazyColumn(
@@ -230,6 +231,8 @@ fun MessagesScreen(
             }
         }
     }
+
+    if (restricted) dev.saged.qayd.ui.perms.RestrictedSmsSheet { restricted = false }
 
     bulk?.let { b ->
         val all = templates

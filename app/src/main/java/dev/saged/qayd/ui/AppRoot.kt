@@ -48,6 +48,8 @@ import dev.saged.qayd.data.Template
 import dev.saged.qayd.system.AppLock
 import dev.saged.qayd.system.AppUpdate
 import dev.saged.qayd.system.AutoBackup
+import dev.saged.qayd.system.Perms
+import dev.saged.qayd.ui.perms.PermissionsScreen
 import dev.saged.qayd.system.Backup
 import dev.saged.qayd.system.Updater
 import kotlinx.coroutines.launch
@@ -99,6 +101,13 @@ fun AppRoot(vm: AppViewModel = viewModel()) {
         onDispose { owner.lifecycle.removeObserver(obs) }
     }
     if (locked && session is Session.Active) return LockScreen { (ctx as? FragmentActivity)?.let { AppLock.prompt(it) { locked = false } } }
+
+    var firstRun by remember { mutableStateOf(!Perms.seen(ctx)) }
+    if (firstRun || Perms.open.value) return PermissionsScreen {
+        Perms.markSeen(ctx)
+        firstRun = false
+        Perms.open.value = false
+    }
 
     Box(Modifier.fillMaxSize()) {
         AppContent(vm, session)
@@ -244,7 +253,7 @@ private fun shopActions(
         retrySms = { r.retrySms(shopId, it) },
         saveTemplate = { id, t, b, k -> r.saveTemplate(shopId, id, t, b, k) },
         deleteTemplate = { r.deleteTemplate(shopId, it) },
-        gateway = { on -> if (on) GatewayService.start(ctx, shopId) else GatewayService.stop(ctx) },
+        gateway = { on -> runCatching { if (on) GatewayService.start(ctx, shopId) else GatewayService.stop(ctx) } },
         backup = { runCatching { Backup.share(ctx, Backup.write(ctx, shopId, ledger, customers, readings, templates)) } },
     )
 }
@@ -285,7 +294,7 @@ private fun UpdateBanner(modifier: Modifier) {
             .clickable(role = SemRole.Button) {
                 if (progress == null) scope.launch {
                     progress = 0f
-                    runCatching { Updater.install(ctx, Updater.download(ctx) { progress = it }) }
+                    runCatching { val apk = Updater.download(ctx) { progress = it }; kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Updater.install(ctx, apk) } }
                     progress = null
                 }
             }.padding(horizontal = 16.dp, vertical = 12.dp),

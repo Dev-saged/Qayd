@@ -212,6 +212,18 @@ class ShellSnapshotTest {
         )
     })
 
+    @Test fun pdfs() {
+        val out = File("build/snapshots").apply { mkdirs() }
+        var name = "statement"
+        val pdf = dev.saged.qayd.pdf.QaydPdf(rule.activity).apply {
+            preview = { n, b -> File(out, "$name-$n.png").outputStream().use { b.compress(Bitmap.CompressFormat.PNG, 100, it) } }
+        }
+        val many = (1..30).map { i -> Tx("x$i", if (i % 3 == 0) TxKind.Payment else TxKind.Debt, 10.0 * i, now - (40 - i) * 24 * h, "c1", byName = "أحمد") }
+        pdf.statement(shop, cs[0], many)
+        name = "receipt"
+        pdf.receipt(shop, txs[1], cs[0], 900.0)
+    }
+
     @Test fun smsQuota() {
         assertEquals(null, shop.smsLeft(500))
         assertEquals(38, shop.copy(smsQuota = 50).smsLeft(12))

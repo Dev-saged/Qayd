@@ -105,9 +105,10 @@ fun MoreScreen(
                 ActionRow(QIcons.Edit, "اسم المحل", shop.name) { onClearOp(); sheet = MoreSheet.Rename }
                 ActionRow(QIcons.UserPlus, "إضافة موظف", "حساب دخول جديد على نطاق ⁦@${shop.suffix}⁩") { onClearOp(); sheet = MoreSheet.Staff }
             }
-            nav.backup?.let { ActionRow(QIcons.Shield, "نسخة احتياطية", "ملف بكل الزبائن والحركات والقراءات تحفظه أو ترسله", onClick = it) }
+            nav.backup?.let { ActionRow(QIcons.Shield, "نسخة احتياطية", "تُحفظ تلقائياً في ${dev.saged.qayd.system.QaydFiles.label(dev.saged.qayd.system.QaydFiles.BACKUPS)} ويمكنك إرسالها", onClick = it) }
             autoBackup?.let { AutoBackupRow(it) }
             ThemeRow()
+            ActionRow(QIcons.Shield, "الصلاحيات", "الإشعارات، الرسائل، العمل في الخلفية، التحديثات") { dev.saged.qayd.system.Perms.open.value = true }
             LockRow()
             ActionRow(QIcons.Logout, "تسجيل الخروج", danger = true, onClick = onSignOut)
         }
@@ -221,7 +222,7 @@ private fun AutoBackupRow(unlocked: Boolean) {
             dev.saged.qayd.system.AutoBackup.setEnabled(ctx, it)
         })
         if (on) T(
-            if (last > 0) "آخر نسخة ${dev.saged.qayd.ui.util.dayLabel(last)} ${dev.saged.qayd.ui.util.clock(last)} · في التنزيلات/Qayd" else "أول نسخة عند فتح التطبيق القادم · في التنزيلات/Qayd",
+            if (last > 0) "آخر نسخة ${dev.saged.qayd.ui.util.dayLabel(last)} ${dev.saged.qayd.ui.util.clock(last)} · في ${dev.saged.qayd.system.QaydFiles.label(dev.saged.qayd.system.QaydFiles.BACKUPS)}" else "أول نسخة عند فتح التطبيق القادم · في ${dev.saged.qayd.system.QaydFiles.label(dev.saged.qayd.system.QaydFiles.BACKUPS)}",
             Modifier.padding(start = 6.dp, bottom = 8.dp), 12.sp, color = LocalPalette.current.mute,
         )
     }

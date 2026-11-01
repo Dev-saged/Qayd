@@ -43,6 +43,7 @@ object Backup {
     }
 
     fun share(ctx: Context, f: File) {
+        QaydFiles.save(ctx, f, QaydFiles.BACKUPS, "application/json")
         val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.files", f)
         ctx.startActivity(
             Intent.createChooser(
