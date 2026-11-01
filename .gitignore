@@ -15,4 +15,3 @@ keystore.properties
 *.jks
 *.keystore
 signing/
-google-services.json

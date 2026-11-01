@@ -1,0 +1,9 @@
+name = "qayd-admin"
+main = "src/index.js"
+compatibility_date = "2025-09-01"
+workers_dev = true
+
+[vars]
+PROJECT_ID = "qayd-ps"
+
+# السر FIREBASE_SA (مفتاح الخدمة JSON) يُضاف بـ: wrangler secret put FIREBASE_SA

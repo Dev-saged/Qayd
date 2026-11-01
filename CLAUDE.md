@@ -36,7 +36,8 @@ Output: no greetings or filler. Max 3 bullets of explanation. One-line summary b
 - Icons: hand-drawn vectors in ui/icons/QIcons.kt only. No emoji, no icon packs.
 - Contrast >= 4.5:1 (checked by ShellSnapshotTest), touch targets >= 44dp, visible focus, respect "remove animations".
 - Numbers/signs inside Arabic text go through an LTR isolate.
-- Never commit google-services.json, keystores or secrets.
+- Never commit keystores, the Firebase service account JSON, Cloudflare tokens or any secret. `app/google-services.json` is committed on purpose (public client config shipped inside every APK).
+- Backend changes: deploy rules with `backend/scripts/deploy-rules.mjs`, Worker with `wrangler deploy` in backend/worker, then run `backend/scripts/smoke-admin.mjs`.
 
 ## Code hygiene
 - No comments revealing AI authorship. Comments only when necessary, short Arabic. No dead code, no TODOs.

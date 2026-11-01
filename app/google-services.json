@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "862556068154",
+    "project_id": "qayd-ps",
+    "storage_bucket": "qayd-ps.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:862556068154:android:62420ac21225a2a055d803",
+        "android_client_info": {
+          "package_name": "dev.saged.qayd"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCJcnooQ12sdljYARNwZjJs4v-HWN6a5Fk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:862556068154:android:12f1a41ab3546fa955d803",
+        "android_client_info": {
+          "package_name": "dev.saged.qayd.debug"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCJcnooQ12sdljYARNwZjJs4v-HWN6a5Fk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -12,8 +12,6 @@ data class Activity(val name: String, val note: String, val amount: Double, val 
 
 @Immutable
 data class HomeSummary(
-    val shopName: String,
-    val user: String,
     val totalDebt: Long,
     val collectedToday: Long,
     val trend: List<Float>,
@@ -21,13 +19,18 @@ data class HomeSummary(
     val pendingReadings: Int,
     val gatewayOnline: Boolean,
     val recent: List<Activity>,
-)
+) {
+    companion object {
+        /** محل جديد: لا حركات بعد (الأرقام الحقيقية تصل مع وحدة الديون). */
+        val Empty = HomeSummary(0, 0, emptyList(), 0, 0, false, emptyList())
+    }
+}
 
-/** بيانات عرض للهيكل قبل ربط قاعدة البيانات. */
+fun idleSlots(count: Int) = (1..count).map { PsSlot(it) }
+
+/** بيانات عرض للمعاينة والاختبار. */
 object SampleHome {
     val summary = HomeSummary(
-        shopName = "كفي الأنوار",
-        user = "ahmad@anoar.ps",
         totalDebt = 18_450,
         collectedToday = 1_240,
         trend = listOf(21.2f, 21.6f, 20.9f, 21.4f, 22.8f, 22.1f, 20.7f, 21.3f, 20.2f, 19.6f, 19.9f, 18.45f),

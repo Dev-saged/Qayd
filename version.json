@@ -1,10 +1,10 @@
 {
-  "version": "0.1.0",
-  "release_url": "https://github.com/Dev-saged/Qayd/releases/tag/v0.1.0",
-  "apk_url": "https://github.com/Dev-saged/Qayd/releases/download/v0.1.0/Qayd-v0.1.0.apk",
+  "version": "0.2.0",
+  "release_url": "https://github.com/Dev-saged/Qayd/releases/latest",
   "changelog": [
-    "الهيكل الأساسي بالتصميم المعتمد (الاتجاه أ)",
-    "الشاشة الرئيسية: الديون، شاشات PlayStation بعداد حي، المؤشرات، آخر الحركات",
-    "شعار قيد وأيقونة التطبيق"
+    "تسجيل الدخول والعمل بدون إنترنت بعد أول دخول",
+    "لوحة المالك: إنشاء المحلات وإيقافها",
+    "إضافة الموظفين وتغيير اسم المحل",
+    "مزامنة فورية بين أجهزة المحل"
   ]
 }

@@ -1,0 +1,45 @@
+rules_version = '2';
+
+// عزل كل محل ببياناته عبر claims (shopId, role, super_admin) التي يضعها Worker qayd-admin فقط.
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isSuper() { return signedIn() && request.auth.token.get('super_admin', false) == true; }
+    function inShop(shopId) { return signedIn() && request.auth.token.get('shopId', '') == shopId; }
+    function isOwner(shopId) { return inShop(shopId) && request.auth.token.get('role', '') == 'owner'; }
+    function shopActive(shopId) {
+      let s = get(/databases/$(db)/documents/shops/$(shopId)).data;
+      return s.active == true && (s.get('licenseUntil', null) == null || s.licenseUntil > request.time);
+    }
+    function onlyChanges(keys) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
+    }
+
+    match /shops/{shopId} {
+      allow read: if isSuper() || inShop(shopId);
+      allow create, delete: if isSuper();
+      allow update: if isSuper() || (isOwner(shopId) && onlyChanges(['name', 'updatedAt']));
+
+      match /members/{uid} {
+        allow read: if isSuper() || inShop(shopId);
+        allow create, delete: if isSuper();
+        allow update: if isSuper()
+          || (isOwner(shopId) && uid != request.auth.uid
+              && onlyChanges(['displayName', 'perms', 'active', 'updatedAt']));
+      }
+
+      // بيانات الوحدات (زبائن، حركات، شاشات، كهرباء، رسائل): أعضاء المحل فقط وما دام المحل فعّالاً
+      match /{col}/{docId=**} {
+        allow read, write: if col != 'members'
+          && (isSuper() || (inShop(shopId) && shopActive(shopId)));
+      }
+    }
+
+    // فهرس تفرّد نطاقات المحلات (يكتبه Worker فقط)
+    match /suffixes/{suffix} {
+      allow read: if isSuper();
+      allow write: if false;
+    }
+  }
+}

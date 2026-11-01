@@ -8,6 +8,9 @@ object BrandConfig {
     const val UPDATE_REPO = "Dev-saged/Qayd"
     const val CURRENCY = "₪"
 
+    /** Worker العمليات الإدارية (إنشاء المحلات والموظفين). */
+    const val ADMIN_API = "https://qayd-admin.dev-mr07.workers.dev"
+
     /** دقائق قبل نهاية الجلسة يبدأ عندها تنبيه "قرب الانتهاء". */
     const val PS_WARN_MINUTES = 20
 

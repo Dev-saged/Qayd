@@ -48,7 +48,12 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import dev.saged.qayd.data.Account
+import dev.saged.qayd.data.Shop
+import dev.saged.qayd.data.SyncState
 import dev.saged.qayd.ui.components.Ambient
+import dev.saged.qayd.ui.home.HomeSummary
+import dev.saged.qayd.ui.home.PsSlot
 import dev.saged.qayd.ui.components.QIcon
 import dev.saged.qayd.ui.components.Silk
 import dev.saged.qayd.ui.components.T
@@ -65,7 +70,14 @@ enum class Tab(val label: String, val icon: ImageVector) {
 }
 
 @Composable
-fun QaydShell() {
+fun QaydShell(
+    shop: Shop,
+    account: Account,
+    sync: SyncState,
+    summary: HomeSummary,
+    slots: List<PsSlot>,
+    more: @Composable (PaddingValues) -> Unit,
+) {
     val p = LocalPalette.current
     var tab by rememberSaveable { mutableStateOf(Tab.Home) }
     val top = WindowInsets.statusBars.asPaddingValues()
@@ -81,10 +93,10 @@ fun QaydShell() {
             ) { t ->
                 val pad = PaddingValues(top = top.calculateTopPadding())
                 when (t) {
-                    Tab.Home -> HomeScreen(pad)
+                    Tab.Home -> HomeScreen(pad, shop, account, sync, summary, slots)
                     Tab.Customers -> EmptyTab(pad, QIcons.Users, "لا يوجد زبائن بعد", "أضف أول زبون من زر الإضافة، وسيظهر رصيده وسجله هنا.")
                     Tab.Messages -> EmptyTab(pad, QIcons.Msg, "طابور الرسائل فارغ", "كل رسالة تُرسل لمدين أو مشترك تظهر هنا بحالتها: بالانتظار، أُرسلت، وصلت.")
-                    Tab.More -> EmptyTab(pad, QIcons.More, "المزيد", "الكهرباء، التقارير، الفريق والصلاحيات، والإعدادات.")
+                    Tab.More -> more(pad)
                 }
             }
             BottomBar(tab) { tab = it }

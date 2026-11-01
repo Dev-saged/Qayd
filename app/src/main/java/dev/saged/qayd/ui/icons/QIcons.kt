@@ -55,4 +55,13 @@ object QIcons {
     val Up = icon("up", "M7 17L17 7M9 7h8v8" to W)
     val Down = icon("down", "M7 7l10 10M17 9v8H9" to W)
     val Clock = icon("clock", "M21 12a9 9 0 1 1-18 0a9 9 0 1 1 18 0" to W, "M12 7v5l3 2" to W)
+    val Logout = icon("logout", "M15 4h4a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-4M10 17l-5-5 5-5M5 12h11" to W)
+    val Shop = icon("shop", "M4 9l1.5-5h13L20 9M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9M4 9h16M9 20v-6h6v6" to W)
+    val UserPlus = icon(
+        "userPlus",
+        "M12.2 8a3.2 3.2 0 1 1-6.4 0a3.2 3.2 0 1 1 6.4 0" to W,
+        "M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M18 8v6M15 11h6" to W,
+    )
+    val Edit = icon("edit", "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" to W)
+    val Sync = icon("sync", "M20 11a8 8 0 0 0-14.3-4.9L4 8M4 4v4h4M4 13a8 8 0 0 0 14.3 4.9L20 16M20 20v-4h-4" to W)
 }

@@ -45,7 +45,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import dev.saged.qayd.config.BrandConfig
+import dev.saged.qayd.data.Account
+import dev.saged.qayd.data.Module
+import dev.saged.qayd.data.Shop
+import dev.saged.qayd.data.SyncState
 import dev.saged.qayd.ui.components.QIcon
+import dev.saged.qayd.ui.components.SyncChip
 import dev.saged.qayd.ui.components.Ring
 import dev.saged.qayd.ui.components.Sparkline
 import dev.saged.qayd.ui.components.T
@@ -63,10 +68,18 @@ private fun money(v: Long) = String.format(Locale.US, "%,d", v)
 private fun money(v: Double) = if (v % 1.0 == 0.0) money(v.toLong()) else String.format(Locale.US, "%,.1f", v)
 
 @Composable
-fun HomeScreen(padding: PaddingValues, summary: HomeSummary = SampleHome.summary) {
+fun HomeScreen(
+    padding: PaddingValues,
+    shop: Shop,
+    account: Account,
+    sync: SyncState,
+    summary: HomeSummary,
+    initialSlots: List<PsSlot>,
+) {
+    val p = LocalPalette.current
     val haptic = LocalHapticFeedback.current
     val now by rememberNow()
-    val slots = remember { mutableStateListOf(*SampleHome.slots(System.currentTimeMillis()).toTypedArray()) }
+    val slots = remember(initialSlots) { mutableStateListOf(*initialSlots.toTypedArray()) }
     var hidden by rememberSaveable { mutableStateOf(false) }
 
     Column(
@@ -77,47 +90,37 @@ fun HomeScreen(padding: PaddingValues, summary: HomeSummary = SampleHome.summary
             .padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Header(summary, Modifier.entrance(0))
+        Header(shop, account, sync, Modifier.entrance(0))
         Hero(summary, hidden, onToggle = { hidden = !hidden }, modifier = Modifier.entrance(1))
 
-        val running = slots.count { it.startedAt != null }
-        SectionTitle("الشاشات", "$running من ${slots.size} قيد التشغيل", Modifier.entrance(2))
-        Row(Modifier.entrance(3), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            slots.forEachIndexed { i, s ->
-                PsTile(
-                    slot = s,
-                    now = now,
-                    modifier = Modifier.weight(1f),
-                    onTap = {
-                        if (s.startedAt == null) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            slots[i] = s.copy(startedAt = System.currentTimeMillis())
-                        }
-                    },
-                    onLong = {
-                        if (s.startedAt != null) {
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                            slots[i] = s.copy(startedAt = null)
-                        }
-                    },
-                )
+        if (Module.Ps in shop.modules && slots.isNotEmpty()) {
+            val running = slots.count { it.startedAt != null }
+            SectionTitle("الشاشات", "$running من ${slots.size} قيد التشغيل", Modifier.entrance(2))
+            PsGrid(slots, now, Modifier.entrance(3)) { i, start ->
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                slots[i] = slots[i].copy(startedAt = start)
             }
         }
 
         Row(Modifier.entrance(4), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             MiniStat("متأخرون", summary.late.toString(), Modifier.weight(1f))
-            MiniStat("قراءات معلّقة", summary.pendingReadings.toString(), Modifier.weight(1f))
-            GatewayStat(summary.gatewayOnline, Modifier.weight(1f))
+            if (Module.Electricity in shop.modules) MiniStat("قراءات معلّقة", summary.pendingReadings.toString(), Modifier.weight(1f))
+            if (Module.Sms in shop.modules) GatewayStat(summary.gatewayOnline, Modifier.weight(1f))
         }
 
         SectionTitle("آخر الحركات", "الكل", Modifier.entrance(5))
-        Column(Modifier.entrance(6)) { summary.recent.forEach { ActivityRow(it) } }
+        Column(Modifier.entrance(6)) {
+            if (summary.recent.isEmpty()) {
+                T("لا توجد حركات بعد. أول دين أو دفعة تسجّلها تظهر هنا.", Modifier.padding(vertical = 18.dp), 13.5.sp, color = p.mute, maxLines = 2)
+            }
+            summary.recent.forEach { ActivityRow(it) }
+        }
         Spacer(Modifier.height(96.dp))
     }
 }
 
 @Composable
-private fun Header(s: HomeSummary, modifier: Modifier) {
+private fun Header(shop: Shop, account: Account, sync: SyncState, modifier: Modifier) {
     val p = LocalPalette.current
     Row(modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
@@ -126,11 +129,12 @@ private fun Header(s: HomeSummary, modifier: Modifier) {
                 .clip(RoundedCornerShape(14.dp))
                 .background(Brush.linearGradient(listOf(p.pri, lerp(p.pri, Color.Black, .45f)))),
             contentAlignment = Alignment.Center,
-        ) { T(s.shopName.take(1), size = 18.sp, weight = FontWeight.Bold, color = p.onPri) }
+        ) { T(shop.name.take(1), size = 18.sp, weight = FontWeight.Bold, color = p.onPri) }
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-            T(s.shopName, size = 16.sp, weight = FontWeight.SemiBold)
-            T(s.user, size = 12.sp, color = p.mute)
+            T(shop.name, size = 16.sp, weight = FontWeight.SemiBold)
+            T(ltr(account.email), size = 12.sp, color = p.mute)
         }
+        SyncChip(sync, Modifier.padding(end = 10.dp))
         Box(
             Modifier
                 .size(44.dp)
@@ -189,12 +193,16 @@ private fun Hero(s: HomeSummary, hidden: Boolean, onToggle: () -> Unit, modifier
             Spacer(Modifier.width(8.dp))
             T(BrandConfig.CURRENCY, Modifier.padding(bottom = 8.dp), 18.sp, FontWeight.Medium, p.pri)
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            QIcon(QIcons.Down, p.ok, Modifier.size(16.dp))
-            Spacer(Modifier.width(6.dp))
-            T("انخفض ${ltr(money(s.collectedToday) + " " + BrandConfig.CURRENCY)} بتحصيل اليوم", size = 12.5.sp, color = p.ok)
+        if (s.collectedToday > 0) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                QIcon(QIcons.Down, p.ok, Modifier.size(16.dp))
+                Spacer(Modifier.width(6.dp))
+                T("انخفض ${ltr(money(s.collectedToday) + " " + BrandConfig.CURRENCY)} بتحصيل اليوم", size = 12.5.sp, color = p.ok)
+            }
+        } else {
+            T("لا تحصيل اليوم بعد", size = 12.5.sp, color = p.mute)
         }
-        Sparkline(s.trend, p.pri, Modifier.fillMaxWidth().height(46.dp).padding(top = 8.dp))
+        if (s.trend.size >= 2) Sparkline(s.trend, p.pri, Modifier.fillMaxWidth().height(46.dp).padding(top = 8.dp))
     }
 }
 
@@ -204,6 +212,28 @@ private fun SectionTitle(title: String, aside: String, modifier: Modifier) {
     Row(modifier.fillMaxWidth().padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
         T(title, Modifier.weight(1f), 14.5.sp, FontWeight.SemiBold)
         T(aside, size = 13.sp, color = p.mute)
+    }
+}
+
+/** شبكة الشاشات: ثلاث في كل صف. ضغطة تبدأ جلسة، وضغطة مطولة تنهيها. */
+@Composable
+private fun PsGrid(slots: List<PsSlot>, now: Long, modifier: Modifier, onChange: (Int, Long?) -> Unit) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        slots.chunked(3).forEachIndexed { row, chunk ->
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                chunk.forEachIndexed { j, s ->
+                    val i = row * 3 + j
+                    PsTile(
+                        slot = s,
+                        now = now,
+                        modifier = Modifier.weight(1f),
+                        onTap = { if (s.startedAt == null) onChange(i, System.currentTimeMillis()) },
+                        onLong = { if (s.startedAt != null) onChange(i, null) },
+                    )
+                }
+                repeat(3 - chunk.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
     }
 }
 
