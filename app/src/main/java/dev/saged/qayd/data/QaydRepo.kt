@@ -13,7 +13,9 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.MetadataChanges
 import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.SnapshotMetadata
+import dev.saged.qayd.ui.home.PsSlot
 import dev.saged.qayd.config.BrandConfig
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -271,6 +273,67 @@ class QaydRepo(context: Context) {
 
     fun deleteRecurring(shopId: String, id: String) {
         db.document("shops/$shopId/recurring/$id").update(mapOf("deleted" to true, "updatedAt" to FieldValue.serverTimestamp()))
+    }
+
+    /* ---------- الأسعار وشاشات PlayStation ---------- */
+
+    fun prices(shopId: String): Flow<Prices> = callbackFlow {
+        val reg = db.document("shops/$shopId/settings/prices").addSnapshotListener { s, _ ->
+            trySend(Prices(s?.getDouble("psRate") ?: 0.0, s?.getDouble("kwhPrice") ?: 0.0))
+        }
+        awaitClose { reg.remove() }
+    }
+
+    fun setPrice(shopId: String, key: String, value: Double) {
+        db.document("shops/$shopId/settings/prices").set(mapOf(key to round2(value), "updatedAt" to FieldValue.serverTimestamp()), SetOptions.merge())
+        log(shopId, "تغيير سعر", if (key == "psRate") "ساعة الشاشة" else "كيلو الكهرباء", value)
+    }
+
+    fun ps(shopId: String): Flow<List<PsSlot>> = callbackFlow {
+        val reg = db.collection("shops/$shopId/ps").addSnapshotListener(MetadataChanges.INCLUDE) { s, _ ->
+            trySend(s?.documents.orEmpty().mapNotNull { d ->
+                val n = d.id.toIntOrNull() ?: return@mapNotNull null
+                val start = (d.get("startedAt") as? Timestamp)?.toDate()?.time
+                PsSlot(
+                    n, start, (d.getLong("bookedMinutes") ?: 60L).toInt(),
+                    (d.get("pausedAt") as? Timestamp)?.toDate()?.time, d.getLong("pausedMs") ?: 0L,
+                    d.getDouble("rate") ?: 0.0, d.getString("byName").orEmpty(),
+                )
+            })
+        }
+        awaitClose { reg.remove() }
+    }
+
+    private fun psDoc(shopId: String, n: Int) = db.document("shops/$shopId/ps/$n")
+    private fun ts(t: Long) = Timestamp(java.util.Date(t))
+
+    fun startPs(shopId: String, n: Int, minutes: Int, rate: Double) {
+        val a = _account.value
+        psDoc(shopId, n).set(
+            mapOf(
+                "startedAt" to ts(System.currentTimeMillis()), "bookedMinutes" to minutes, "pausedAt" to null, "pausedMs" to 0L,
+                "rate" to rate, "by" to a?.uid, "byName" to a?.displayName, "updatedAt" to FieldValue.serverTimestamp(),
+            ),
+        )
+    }
+
+    fun pausePs(shopId: String, s: PsSlot) {
+        val now = System.currentTimeMillis()
+        val change = if (s.pausedAt == null) mapOf("pausedAt" to ts(now))
+        else mapOf("pausedAt" to null, "pausedMs" to s.pausedMs + (now - s.pausedAt))
+        psDoc(shopId, s.number).update(change + ("updatedAt" to FieldValue.serverTimestamp()))
+    }
+
+    fun extendPs(shopId: String, s: PsSlot, minutes: Int) {
+        psDoc(shopId, s.number).update(mapOf("bookedMinutes" to (if (s.open) 0 else s.bookedMinutes + minutes), "updatedAt" to FieldValue.serverTimestamp()))
+    }
+
+    /** إنهاء الجلسة: تُسجل بيعاً للمحل أو ديناً على زبون، وتعود الشاشة متاحة. */
+    fun endPs(shopId: String, s: PsSlot, amount: Double, customerId: String?) {
+        if (amount > 0) {
+            addTx(shopId, if (customerId == null) TxKind.Sale else TxKind.Debt, amount, customerId = customerId, source = "ps", ref = "شاشة ${s.number}")
+        }
+        psDoc(shopId, s.number).set(mapOf("startedAt" to null, "updatedAt" to FieldValue.serverTimestamp()))
     }
 
     /* ---------- Worker الإدارة ---------- */

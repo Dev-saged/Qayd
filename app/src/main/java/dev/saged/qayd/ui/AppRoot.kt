@@ -22,7 +22,18 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.saged.qayd.config.BrandConfig
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import dev.saged.qayd.data.Access
+import dev.saged.qayd.data.Module
+import dev.saged.qayd.data.Prices
+import dev.saged.qayd.notify.PsAlarms
 import dev.saged.qayd.data.Account
 import dev.saged.qayd.data.Ledger
 import dev.saged.qayd.data.TxKind
@@ -88,9 +99,21 @@ private fun ShopRoot(vm: AppViewModel, account: Account) {
         shop.blockReason() != null -> Blocked(shop.blockReason()!!, vm::signOut)
         else -> {
             val op by vm.adminOp.collectAsStateWithLifecycle()
-            val slots = remember(shop.psScreens) { idleSlots(shop.psScreens) }
+            val ctx = LocalContext.current
+            val live by remember(shop.id) { vm.repo.ps(shop.id) }.collectAsStateWithLifecycle(emptyList())
+            val prices by remember(shop.id) { vm.repo.prices(shop.id) }.collectAsStateWithLifecycle(Prices.None)
+            val slots = remember(shop.psScreens, live) {
+                idleSlots(shop.psScreens).map { s -> live.firstOrNull { it.number == s.number && it.running } ?: s }
+            }
+            LaunchedEffect(slots) { if (Module.Ps in shop.modules) PsAlarms.sync(ctx, slots) }
+            val askNotif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+            LaunchedEffect(Unit) {
+                if (Build.VERSION.SDK_INT >= 33 &&
+                    ContextCompat.checkSelfPermission(ctx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                ) askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
             val ledger = rememberLedger(vm, shop.id)
-            val actions = remember(shop.id, ledger) { shopActions(vm, shop.id, ledger) }
+            val actions = remember(shop.id, ledger, prices) { shopActions(vm, shop.id, ledger, prices) }
             val members by remember(shop.id) { vm.repo.members(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val audit by remember(shop.id, account.role) {
                 if (account.role == Role.Owner) vm.repo.audit(shop.id) else kotlinx.coroutines.flow.flowOf(emptyList())
@@ -98,7 +121,7 @@ private fun ShopRoot(vm: AppViewModel, account: Account) {
             val me = members.firstOrNull { it.uid == account.uid }
             val access = if (account.role == Role.Owner) Access.Full else Access(Role.Staff, me?.perms.orEmpty(), me?.active ?: true)
             if (!access.active) return Blocked("حسابك موقوف من صاحب المحل", vm::signOut)
-            QaydShell(shop, account, current.second, ledger, slots, actions, access, members, audit) { pad, nav ->
+            QaydShell(shop, account, current.second, ledger, slots, actions, access, members, audit, prices) { pad, nav ->
                 MoreScreen(
                     padding = pad, shop = shop, account = account, sync = current.second, op = op,
                     onRename = { vm.repo.renameShop(shop.id, it) },
@@ -124,7 +147,7 @@ private fun rememberLedger(vm: AppViewModel, shopId: String): Ledger {
     }
 }
 
-private fun shopActions(vm: AppViewModel, shopId: String, ledger: Ledger) = vm.repo.let { r ->
+private fun shopActions(vm: AppViewModel, shopId: String, ledger: Ledger, prices: Prices) = vm.repo.let { r ->
     ShopActions(
         sale = { r.addTx(shopId, TxKind.Sale, it) },
         debt = { c, v -> r.addTx(shopId, TxKind.Debt, v, customerId = c) },
@@ -135,6 +158,11 @@ private fun shopActions(vm: AppViewModel, shopId: String, ledger: Ledger) = vm.r
         addRecurring = { t, c, d -> r.addRecurring(shopId, t, c, d) },
         deleteRecurring = { r.deleteRecurring(shopId, it) },
         updateMember = { m, perms, active -> r.updateMember(shopId, m, perms, active) },
+        psStart = { n, m -> r.startPs(shopId, n, m, prices.psRate) },
+        psPause = { r.pausePs(shopId, it) },
+        psExtend = { r.extendPs(shopId, it, 30) },
+        psEnd = { s, v, c -> r.endPs(shopId, s, v, c) },
+        setPrice = { k, v -> r.setPrice(shopId, k, v) },
     )
 }
 

@@ -46,6 +46,7 @@
 ## Changes
 - v0.1.0: shell + home (direction A), icon, CI, per-build releases.
 - v0.2.0: Firebase auth + offline session, super admin panel, staff creation, shop rename, sync chip, Worker + rules.
+- v0.5.0: PsSlot (startedAt/paused/rate) synced via shops/{id}/ps/{n}; ui/ps sheets; notify/PsAlarms (exact alarms + receiver); settings/prices (psRate, kwhPrice) + PricesSheet.
 - v0.4.0: Perm/Member/Access (data/Team.kt), ui/team (TeamPage perms + shift, AuditPage), rules enforce perms per collection + featureOn(config/features).
 - v0.3.0: quick sale + in-app numpad, customers/debts/customer page, expenses + recurring monthly payments, seal icon, keys in private repo.
 

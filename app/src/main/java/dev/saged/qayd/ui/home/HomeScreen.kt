@@ -24,7 +24,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -77,14 +76,14 @@ fun HomeScreen(
     account: Account,
     sync: SyncState,
     ledger: Ledger,
-    initialSlots: List<PsSlot>,
+    slots: List<PsSlot>,
     access: Access,
     onQuickSale: (() -> Unit)?,
     onTxTap: (Tx) -> Unit,
+    onPs: (PsSlot) -> Unit = {},
 ) {
     val haptic = LocalHapticFeedback.current
     val now by rememberNow()
-    val slots = remember(initialSlots) { mutableStateListOf(*initialSlots.toTypedArray()) }
     var hidden by rememberSaveable { mutableStateOf(false) }
 
     Column(
@@ -100,11 +99,12 @@ fun HomeScreen(
         if (onQuickSale != null) QuickSale(ledger, Modifier.entrance(2), onQuickSale, onTxTap)
 
         if (Module.Ps in shop.modules && slots.isNotEmpty()) {
-            val running = slots.count { it.startedAt != null }
-            SectionTitle("الشاشات", "$running من ${slots.size} قيد التشغيل", Modifier.entrance(3))
-            PsGrid(slots, now, Modifier.entrance(4)) { i, start ->
+            val running = slots.count { it.running }
+            val psToday = ledger.allTx.filter { it.source == "ps" && it.at >= Ledger.dayStart(now) }.sumOf { it.amount }
+            SectionTitle("الشاشات", "$running من ${slots.size} تعمل · دخل اليوم ${cur(psToday)}", Modifier.entrance(3))
+            PsGrid(slots, now, Modifier.entrance(4)) {
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                slots[i] = slots[i].copy(startedAt = start)
+                onPs(it)
             }
         }
 
@@ -260,22 +260,13 @@ private fun SectionTitle(title: String, aside: String, modifier: Modifier) {
     }
 }
 
-/** شبكة الشاشات: ثلاث في كل صف. ضغطة تبدأ جلسة، وضغطة مطولة تنهيها. */
+/** شبكة الشاشات: ثلاث في كل صف. الضغط يبدأ جلسة أو يفتح تحكمها. */
 @Composable
-private fun PsGrid(slots: List<PsSlot>, now: Long, modifier: Modifier, onChange: (Int, Long?) -> Unit) {
+private fun PsGrid(slots: List<PsSlot>, now: Long, modifier: Modifier, onTap: (PsSlot) -> Unit) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        slots.chunked(3).forEachIndexed { row, chunk ->
+        slots.chunked(3).forEach { chunk ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                chunk.forEachIndexed { j, s ->
-                    val i = row * 3 + j
-                    PsTile(
-                        slot = s,
-                        now = now,
-                        modifier = Modifier.weight(1f),
-                        onTap = { if (s.startedAt == null) onChange(i, System.currentTimeMillis()) },
-                        onLong = { if (s.startedAt != null) onChange(i, null) },
-                    )
-                }
+                chunk.forEach { s -> PsTile(slot = s, now = now, modifier = Modifier.weight(1f), onTap = { onTap(s) }) }
                 repeat(3 - chunk.size) { Spacer(Modifier.weight(1f)) }
             }
         }
@@ -283,14 +274,14 @@ private fun PsGrid(slots: List<PsSlot>, now: Long, modifier: Modifier, onChange:
 }
 
 @Composable
-private fun PsTile(slot: PsSlot, now: Long, modifier: Modifier, onTap: () -> Unit, onLong: () -> Unit) {
+private fun PsTile(slot: PsSlot, now: Long, modifier: Modifier, onTap: () -> Unit) {
     val p = LocalPalette.current
     val start = slot.startedAt
-    val elapsed = if (start != null) (now - start).coerceAtLeast(0L) else 0L
-    val booked = slot.bookedMinutes * 60_000L
-    val left = booked - elapsed
-    val over = start != null && left <= 0L
-    val warn = start != null && !over && left <= BrandConfig.PS_WARN_MINUTES * 60_000L
+    val elapsed = slot.activeMs(now)
+    val booked = if (slot.open) 3_600_000L else slot.bookedMinutes * 60_000L
+    val left = slot.leftMs(now)
+    val over = start != null && !slot.open && left <= 0L
+    val warn = start != null && !slot.open && !over && left <= BrandConfig.PS_WARN_MINUTES * 60_000L
     val accent = when {
         over -> p.danger
         warn -> p.warn
@@ -311,10 +302,8 @@ private fun PsTile(slot: PsSlot, now: Long, modifier: Modifier, onTap: () -> Uni
                 interactionSource = source,
                 indication = null,
                 role = Role.Button,
-                onClickLabel = if (start == null) "ابدأ جلسة" else null,
-                onLongClickLabel = if (start != null) "أنهِ الجلسة" else null,
+                onClickLabel = if (start == null) "ابدأ جلسة" else "تحكم الجلسة",
                 onClick = onTap,
-                onLongClick = onLong,
             )
             .padding(horizontal = 8.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -326,12 +315,14 @@ private fun PsTile(slot: PsSlot, now: Long, modifier: Modifier, onTap: () -> Uni
             T("متاحة", size = 15.sp, weight = FontWeight.SemiBold)
             T("ابدأ جلسة", size = 11.sp, color = p.mute)
         } else {
-            Ring((elapsed.toFloat() / booked).coerceIn(0f, 1f), accent, p.line, Modifier.size(42.dp))
+            Ring(if (slot.open) (elapsed % booked).toFloat() / booked else (elapsed.toFloat() / booked).coerceIn(0f, 1f), accent, p.line, Modifier.size(42.dp))
             val sec = elapsed / 1000
             T(String.format(Locale.US, "%02d:%02d:%02d", sec / 3600, sec / 60 % 60, sec % 60), size = 15.sp, weight = FontWeight.SemiBold)
             T(
                 when {
+                    slot.pausedAt != null -> "متوقفة مؤقتاً"
                     over -> "انتهى الوقت"
+                    slot.open -> cur(slot.cost(now))
                     else -> "باقي ${(left + 59_999) / 60_000} د"
                 },
                 Modifier.then(if (warn || over) Modifier.alphaPulse(pulse) else Modifier),

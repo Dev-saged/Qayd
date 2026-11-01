@@ -5,7 +5,12 @@ import dev.saged.qayd.data.Access
 import dev.saged.qayd.data.AmountInput
 import dev.saged.qayd.data.AuditEntry
 import dev.saged.qayd.data.Member
+import dev.saged.qayd.data.Module
 import dev.saged.qayd.data.Perm
+import dev.saged.qayd.data.Prices
+import dev.saged.qayd.ui.ps.PsSessionSheet
+import dev.saged.qayd.ui.ps.PsStartSheet
+import dev.saged.qayd.ui.util.cur
 import dev.saged.qayd.ui.team.AuditPage
 import dev.saged.qayd.ui.team.TeamPage
 import dev.saged.qayd.data.Customer
@@ -96,7 +101,7 @@ private sealed interface Page {
 }
 
 /** تنقل صفحات "المزيد". */
-class MoreNav(val expenses: (() -> Unit)?, val team: (() -> Unit)?, val audit: (() -> Unit)?)
+class MoreNav(val expenses: (() -> Unit)?, val team: (() -> Unit)?, val audit: (() -> Unit)?, val prices: (() -> Unit)? = null)
 
 @Composable
 fun QaydShell(
@@ -109,6 +114,7 @@ fun QaydShell(
     access: Access = Access.Full,
     members: List<Member> = emptyList(),
     audit: List<AuditEntry> = emptyList(),
+    prices: Prices = Prices.None,
     more: @Composable (PaddingValues, MoreNav) -> Unit,
 ) {
     val p = LocalPalette.current
@@ -119,6 +125,9 @@ fun QaydShell(
     var newAction by rememberSaveable { mutableStateOf(false) }
     var addingCustomer by rememberSaveable { mutableStateOf(false) }
     var confirm by remember { mutableStateOf<Tx?>(null) }
+    var psOpen by remember { mutableStateOf<PsSlot?>(null) }
+    var psDebt by remember { mutableStateOf<PsSlot?>(null) }
+    var pricesOpen by rememberSaveable { mutableStateOf(false) }
     val owner = account.role == dev.saged.qayd.data.Role.Owner
     val tap: (Tx) -> Unit = { if (access.can(Perm.DeleteTx)) confirm = it }
     val top = WindowInsets.statusBars.asPaddingValues()
@@ -161,6 +170,7 @@ fun QaydShell(
                         Tab.Home -> HomeScreen(
                             pad0, shop, account, sync, ledger, slots, access,
                             onQuickSale = { pad = PadRequest.Sale }.takeIf { access.can(Perm.QuickSale) }, onTxTap = tap,
+                            onPs = { if (access.can(Perm.ManagePs)) psOpen = it },
                         )
                         Tab.Customers -> CustomersScreen(
                             pad0, ledger, access.can(Perm.ViewBalances), onOpen = { page = Page.CustomerDetail(it.id) },
@@ -173,6 +183,9 @@ fun QaydShell(
                                 expenses = { page = Page.Expenses }.takeIf { access.can(Perm.Expenses) },
                                 team = { page = Page.Team }.takeIf { owner },
                                 audit = { page = Page.Audit }.takeIf { owner },
+                                prices = { pricesOpen = true }.takeIf {
+                                    access.can(Perm.SetPrices) && (Module.Ps in shop.modules || Module.Electricity in shop.modules)
+                                },
                             ),
                         )
                     }
@@ -235,7 +248,37 @@ fun QaydShell(
             chips = if (r.recurring == null) ExpenseCategory.entries.map { PadChip(it.key, it.label) } else emptyList(),
             onDismiss = { pad = null },
         ) { v, chip -> actions.expense(r.recurring?.item?.category ?: ExpenseCategory.of(chip), v, r.recurring?.item?.id) }
+        is PadRequest.Price -> NumpadSheet(
+            r.title, "السعر الحالي ${if (r.current > 0) cur(r.current) else "غير محدد"}", p.pri, "حفظ السعر",
+            initial = AmountInput.of(r.current), onDismiss = { pad = null },
+        ) { v, _ -> actions.setPrice(r.key, v) }
         null -> Unit
+    }
+
+    psOpen?.let { open ->
+        val s = slots.firstOrNull { it.number == open.number } ?: open
+        if (!s.running) {
+            PsStartSheet(s.number, prices.psRate, onStart = { m -> actions.psStart(s.number, m) }) { psOpen = null }
+        } else {
+            PsSessionSheet(
+                s, onExtend = { actions.psExtend(s) }, onPause = { actions.psPause(s) },
+                onEndCash = { actions.psEnd(s, s.cost(System.currentTimeMillis()), null) },
+                onEndDebt = { psDebt = s },
+            ) { psOpen = null }
+        }
+    }
+
+    psDebt?.let { s ->
+        CustomerPickerSheet(
+            title = "جلسة شاشة ${s.number} على زبون",
+            customers = ledger.customers,
+            onPick = { c -> actions.psEnd(s, s.cost(System.currentTimeMillis()), c.id); psDebt = null },
+            onCreate = { n, ph -> actions.psEnd(s, s.cost(System.currentTimeMillis()), actions.addCustomer(n, ph)); psDebt = null },
+        ) { psDebt = null }
+    }
+
+    if (pricesOpen) {
+        PricesSheet(prices, Module.Ps in shop.modules, Module.Electricity in shop.modules, onEdit = { pricesOpen = false; pad = it }) { pricesOpen = false }
     }
 
     confirm?.let { t ->

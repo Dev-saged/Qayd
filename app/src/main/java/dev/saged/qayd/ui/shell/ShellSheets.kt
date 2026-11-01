@@ -29,6 +29,9 @@ import dev.saged.qayd.data.Access
 import dev.saged.qayd.data.Customer
 import dev.saged.qayd.data.Member
 import dev.saged.qayd.data.Perm
+import dev.saged.qayd.data.Prices
+import dev.saged.qayd.ui.home.PsSlot
+import dev.saged.qayd.ui.util.cur
 import dev.saged.qayd.data.CustomerBalance
 import dev.saged.qayd.data.ExpenseCategory
 import dev.saged.qayd.data.RecurringStatus
@@ -57,6 +60,11 @@ class ShopActions(
     val addRecurring: (String, ExpenseCategory, Int) -> Unit,
     val deleteRecurring: (String) -> Unit,
     val updateMember: (Member, Set<Perm>, Boolean) -> Unit = { _, _, _ -> },
+    val psStart: (Int, Int) -> Unit = { _, _ -> },
+    val psPause: (PsSlot) -> Unit = {},
+    val psExtend: (PsSlot) -> Unit = {},
+    val psEnd: (PsSlot, Double, String?) -> Unit = { _, _, _ -> },
+    val setPrice: (String, Double) -> Unit = { _, _ -> },
 ) {
     companion object {
         val None = ShopActions({}, { _, _ -> }, { _, _ -> }, { _, _, _ -> }, {}, { _, _ -> "" }, { _, _, _ -> }, {})
@@ -69,6 +77,20 @@ sealed interface PadRequest {
     data class Debt(val customer: Customer) : PadRequest
     data class Payment(val customer: Customer) : PadRequest
     data class Expense(val recurring: RecurringStatus? = null) : PadRequest
+    data class Price(val key: String, val title: String, val current: Double) : PadRequest
+}
+
+@Composable
+fun PricesSheet(prices: Prices, ps: Boolean, power: Boolean, onEdit: (PadRequest.Price) -> Unit, onDismiss: () -> Unit) {
+    QSheet("الأسعار", onDismiss) {
+        if (ps) ActionRow(QIcons.Pad, "سعر ساعة الشاشة", if (prices.psRate > 0) cur(prices.psRate) else "غير محدد") {
+            onEdit(PadRequest.Price("psRate", "سعر ساعة الشاشة", prices.psRate))
+        }
+        if (power) ActionRow(QIcons.Bolt, "سعر كيلو الكهرباء", if (prices.kwhPrice > 0) cur(prices.kwhPrice) else "غير محدد") {
+            onEdit(PadRequest.Price("kwhPrice", "سعر كيلو الكهرباء", prices.kwhPrice))
+        }
+        T("السعر الجديد يُطبق على الجلسات والفواتير الجديدة فقط، والقديمة تبقى بسعرها.", Modifier.padding(top = 8.dp), 12.5.sp, color = LocalPalette.current.mute, maxLines = 2)
+    }
 }
 
 @Composable

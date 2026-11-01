@@ -70,3 +70,8 @@ object Validate {
     fun password(s: String): String? = if (s.length >= 8) null else "8 أحرف على الأقل"
     fun login(s: String): String? = if (s.count { it == '@' } == 1 && s.substringAfter('@').contains('.')) null else "اكتب اسم المستخدم كاملاً مثل ahmad@anoar.ps"
 }
+
+@Immutable
+data class Prices(val psRate: Double, val kwhPrice: Double) {
+    companion object { val None = Prices(0.0, 0.0) }
+}
