@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -68,6 +69,7 @@ fun MoreScreen(
 ) {
     val p = LocalPalette.current
     var sheet by rememberSaveable { mutableStateOf<MoreSheet?>(null) }
+    var paidFeature by rememberSaveable { mutableStateOf<String?>(null) }
     val owner = account.role == Role.Owner
 
     Column(
@@ -96,6 +98,7 @@ fun MoreScreen(
 
         Column(Modifier.entrance(2).fillMaxWidth().clip(shape).background(p.surface).border(1.dp, p.line, shape).padding(6.dp)) {
             nav.reports?.let { ActionRow(QIcons.Chart, "التقارير", "مبيعات الأسبوع، صافي الشهر، أكبر المدينين، وأداء الفريق", onClick = it) }
+            if (nav.reportsLocked) ActionRow(QIcons.Chart, "التقارير", "مبيعات الأسبوع، صافي الشهر، أكبر المدينين، وأداء الفريق", locked = true) { paidFeature = "التقارير" }
             nav.power?.let { ActionRow(QIcons.Bolt, "الكهرباء", "المشتركون وجولة القراءات وفواتير الشهر", onClick = it) }
             nav.expenses?.let { ActionRow(QIcons.Wallet, "المصروفات", "بضاعة، إنترنت، كهرباء، إيجار، ودفعات شهرية ثابتة", onClick = it) }
             nav.team?.let { ActionRow(QIcons.Users, "الفريق والصلاحيات", "وردية اليوم لكل عضو، وصلاحياته، وإيقافه", onClick = it) }
@@ -108,15 +111,20 @@ fun MoreScreen(
             nav.backup?.let { ActionRow(QIcons.Shield, "نسخة احتياطية", "تُحفظ تلقائياً في ${dev.saged.qayd.system.QaydFiles.label(dev.saged.qayd.system.QaydFiles.BACKUPS)} ويمكنك إرسالها", onClick = it) }
             autoBackup?.let { AutoBackupRow(it) }
             ThemeRow()
+            val update by dev.saged.qayd.system.Updates.latest.collectAsState()
+            ActionRow(QIcons.Sync, "التحديثات", "النسخة ⁦${dev.saged.qayd.system.Updates.current}⁩ وسجل كل الإصدارات ومميزاتها", badge = update?.let { "جديد" }) {
+                dev.saged.qayd.system.Updates.pageOpen.value = true
+            }
             ActionRow(QIcons.Shield, "الصلاحيات", "الإشعارات، الرسائل، العمل في الخلفية، التحديثات") { dev.saged.qayd.system.Perms.open.value = true }
             LockRow()
             ActionRow(QIcons.Logout, "تسجيل الخروج", danger = true, onClick = onSignOut)
         }
 
         DevCard(Modifier.entrance(3))
-        Spacer(Modifier.height(96.dp))
+        Spacer(Modifier.height(36.dp))
     }
 
+    paidFeature?.let { dev.saged.qayd.ui.components.PaidSheet(it) { paidFeature = null } }
     when (sheet) {
         MoreSheet.Rename -> RenameSheet(shop.name, onRename) { sheet = null }
         MoreSheet.Staff -> StaffSheet(shop.suffix, op, onAddStaff) { sheet = null; onClearOp() }
@@ -202,16 +210,9 @@ private fun ThemeRow() {
 private fun AutoBackupRow(unlocked: Boolean) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     if (!unlocked) {
-        ActionRow(QIcons.Lock, "النسخ الاحتياطي التلقائي", "ميزة مدفوعة: نسخة يومية تلقائية. اضغط للتواصل مع المالك") {
-            runCatching {
-                ctx.startActivity(
-                    android.content.Intent(
-                        android.content.Intent.ACTION_VIEW,
-                        android.net.Uri.parse("https://wa.me/${BrandConfig.OWNER_WHATSAPP}?text=" + android.net.Uri.encode("أريد تفعيل النسخ الاحتياطي التلقائي في قيد")),
-                    ),
-                )
-            }
-        }
+        var paid by androidx.compose.runtime.remember { mutableStateOf(false) }
+        ActionRow(QIcons.Shield, "النسخ الاحتياطي التلقائي", "نسخة يومية تلقائية في مجلد قيد", locked = true) { paid = true }
+        if (paid) dev.saged.qayd.ui.components.PaidSheet("النسخ الاحتياطي التلقائي") { paid = false }
         return
     }
     var on by androidx.compose.runtime.remember { mutableStateOf(dev.saged.qayd.system.AutoBackup.enabled(ctx)) }

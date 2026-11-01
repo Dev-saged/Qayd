@@ -66,7 +66,7 @@ fun IconTile(icon: ImageVector, label: String, onClick: () -> Unit, modifier: Mo
 
 /** صف إعداد قابل للضغط. */
 @Composable
-fun ActionRow(icon: ImageVector, title: String, sub: String? = null, danger: Boolean = false, onClick: () -> Unit) {
+fun ActionRow(icon: ImageVector, title: String, sub: String? = null, danger: Boolean = false, locked: Boolean = false, badge: String? = null, onClick: () -> Unit) {
     val p = LocalPalette.current
     val c = if (danger) p.danger else p.ink
     Row(
@@ -78,8 +78,12 @@ fun ActionRow(icon: ImageVector, title: String, sub: String? = null, danger: Boo
             QIcon(icon, if (danger) p.danger else p.pri, Modifier.size(20.dp))
         }
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-            T(title, size = 14.5.sp, weight = FontWeight.Medium, color = c)
-            if (sub != null) T(sub, size = 12.sp, color = p.mute, maxLines = 2)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                T(title, size = 14.5.sp, weight = FontWeight.Medium, color = c)
+                if (locked) QIcon(dev.saged.qayd.ui.icons.QIcons.Lock, p.pri, Modifier.padding(start = 6.dp).size(14.dp), "مدفوعة")
+                if (badge != null) T(badge, Modifier.padding(start = 8.dp).clip(RoundedCornerShape(8.dp)).background(p.pri).padding(horizontal = 7.dp, vertical = 1.dp), 10.5.sp, FontWeight.SemiBold, p.onPri)
+            }
+            if (sub != null) T(sub, Modifier.padding(top = 4.dp), 12.sp, color = p.mute, maxLines = 2)
         }
     }
 }
@@ -136,5 +140,33 @@ fun LockedCard(
                 )
             }
         }, secondary = true)
+    }
+}
+
+/** نافذة الميزة المدفوعة: شرح مختصر وزر واتساب برسالة جاهزة. */
+@Composable
+fun PaidSheet(feature: String, onDismiss: () -> Unit) {
+    val p = LocalPalette.current
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    QSheet("ميزة مدفوعة", onDismiss) {
+        Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            Box(Modifier.size(64.dp).clip(RoundedCornerShape(20.dp)).background(p.pri.copy(alpha = .14f)), contentAlignment = Alignment.Center) {
+                QIcon(dev.saged.qayd.ui.icons.QIcons.Lock, p.pri, Modifier.size(30.dp))
+            }
+            T(feature, Modifier.padding(top = 14.dp), 18.sp, FontWeight.SemiBold)
+            T("هذه الميزة غير مفعّلة لمحلك. تواصل مع مسؤول التطبيق لتفعيلها.", Modifier.padding(top = 6.dp), 13.5.sp, color = p.mute, maxLines = 3)
+            Spacer(Modifier.height(18.dp))
+            QButton("تواصل عبر واتساب", {
+                runCatching {
+                    ctx.startActivity(
+                        android.content.Intent(
+                            android.content.Intent.ACTION_VIEW,
+                            android.net.Uri.parse("https://wa.me/${dev.saged.qayd.config.BrandConfig.OWNER_WHATSAPP}?text=" + android.net.Uri.encode("أريد تفعيل ميزة $feature في قيد")),
+                        ),
+                    )
+                }
+                onDismiss()
+            })
+        }
     }
 }

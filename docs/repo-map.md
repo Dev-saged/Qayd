@@ -46,6 +46,7 @@
 ## Changes
 - v0.1.0: shell + home (direction A), icon, CI, per-build releases.
 - v0.2.0: Firebase auth + offline session, super admin panel, staff creation, shop rename, sync chip, Worker + rules.
+- v1.3.0: system/Updates (app-wide check/download state, release notes from assets/releases copied from docs/releases by gradle task releaseNotes), ui/updates (UpdateLayer sheet + download pill, UpdatesPage history), PaidSheet + ActionRow(locked, badge), MoreNav.reportsLocked.
 - v1.2.0: system/Perms + ui/perms/PermissionsScreen (first run + More, RestrictedSmsSheet), Updater installs via PackageInstaller session + system/InstallReceiver, system/QaydFiles (Downloads/Qayd/Backups|Invoices), pdf/QaydPdf redesigned (Reem Kufi in assets/fonts, drawn icons, no author) with bitmap preview for tests.
 - v1.1.0: Kufi icon (brand/tools/make_kufi_icon.py → launcher layers + drawable/qayd_logo), system/ThemePref (System/Light/Dark), system/AutoBackup (daily, Downloads/Qayd, keep 7; feature autoBackup), Shop.smsQuota + shops/{id}/usage/sms-YYYY-M counter enforced in rules, MessagesScreen bulk segments, ui/more/DevCard.
 - v1.0.0: data/Reports.kt + ui/reports, system/AppLock (biometric, FragmentActivity), system/Backup (JSON share), system/Updater (Worker /v1/app/latest + /v1/app/apk from KV QAYD_APP, uploaded by CI), UpdateBanner + LockScreen in AppRoot.

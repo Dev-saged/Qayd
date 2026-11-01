@@ -30,15 +30,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.semantics.Role as SemRole
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -46,13 +42,10 @@ import dev.saged.qayd.data.Customer
 import dev.saged.qayd.data.Reading
 import dev.saged.qayd.data.Template
 import dev.saged.qayd.system.AppLock
-import dev.saged.qayd.system.AppUpdate
 import dev.saged.qayd.system.AutoBackup
 import dev.saged.qayd.system.Perms
 import dev.saged.qayd.ui.perms.PermissionsScreen
 import dev.saged.qayd.system.Backup
-import dev.saged.qayd.system.Updater
-import kotlinx.coroutines.launch
 import dev.saged.qayd.data.Access
 import dev.saged.qayd.data.Module
 import dev.saged.qayd.data.PowerState
@@ -109,9 +102,11 @@ fun AppRoot(vm: AppViewModel = viewModel()) {
         Perms.open.value = false
     }
 
+    val updatesOpen by dev.saged.qayd.system.Updates.pageOpen.collectAsStateWithLifecycle()
     Box(Modifier.fillMaxSize()) {
         AppContent(vm, session)
-        UpdateBanner(Modifier.align(Alignment.TopCenter))
+        if (updatesOpen) dev.saged.qayd.ui.updates.UpdatesPage { dev.saged.qayd.system.Updates.pageOpen.value = false }
+        dev.saged.qayd.ui.updates.UpdateLayer(Modifier.align(Alignment.TopCenter))
     }
 }
 
@@ -278,36 +273,6 @@ private fun LockScreen(onUnlock: () -> Unit) {
 }
 
 /** شريط التحديث: يظهر عند توفر نسخة أحدث، وينزّلها ويفتح التثبيت. */
-@Composable
-private fun UpdateBanner(modifier: Modifier) {
-    val p = LocalPalette.current
-    val ctx = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var update by remember { mutableStateOf<AppUpdate?>(null) }
-    var progress by remember { mutableStateOf<Float?>(null) }
-    var hidden by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { update = Updater.check() }
-    val u = update ?: return
-    if (hidden) return
-    Row(
-        modifier.statusBarsPadding().padding(12.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.pri)
-            .clickable(role = SemRole.Button) {
-                if (progress == null) scope.launch {
-                    progress = 0f
-                    runCatching { val apk = Updater.download(ctx) { progress = it }; kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { Updater.install(ctx, apk) } }
-                    progress = null
-                }
-            }.padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(Modifier.weight(1f)) {
-            T("تحديث جديد ${u.version} (بناء ${u.build})", size = 14.sp, weight = FontWeight.SemiBold, color = p.onPri)
-            T(progress?.let { "جارٍ التنزيل ${(it * 100).toInt()}%" } ?: "اضغط للتنزيل والتثبيت", size = 12.sp, color = p.onPri)
-        }
-        T("لاحقاً", Modifier.clip(RoundedCornerShape(10.dp)).clickable(role = SemRole.Button) { hidden = true }.padding(8.dp), 12.5.sp, FontWeight.Medium, p.onPri)
-    }
-}
-
 @Composable
 private fun Splash() {
     val p = LocalPalette.current

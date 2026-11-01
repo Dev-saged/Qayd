@@ -224,6 +224,14 @@ class ShellSnapshotTest {
         pdf.receipt(shop, txs[1], cs[0], 900.0)
     }
 
+    @Test fun updatesPage() = snap("updates", true) { dev.saged.qayd.ui.updates.UpdatesPage {} }
+
+    @Test fun releaseNotes() {
+        val r = dev.saged.qayd.system.Updates.parse("1.0.0", "## الإضافات\n- **أ** ب\n  - فرعي\n\n## الإصلاحات\n- لا شيء.\n")
+        assertEquals(1, r.sections.size)
+        assertEquals(listOf(0 to "أ ب", 1 to "فرعي"), r.sections[0].items)
+    }
+
     @Test fun smsQuota() {
         assertEquals(null, shop.smsLeft(500))
         assertEquals(38, shop.copy(smsQuota = 50).smsLeft(12))

@@ -128,6 +128,7 @@ class MoreNav(
     val power: (() -> Unit)? = null,
     val reports: (() -> Unit)? = null,
     val backup: (() -> Unit)? = null,
+    val reportsLocked: Boolean = false,
 )
 
 @Composable
@@ -257,6 +258,7 @@ fun QaydShell(
                                 power = { page = Page.Power }.takeIf { Module.Electricity in shop.modules },
                                 reports = { page = Page.Reports }.takeIf { access.can(Perm.ViewReports) && full.unlocked("reports", features) },
                                 backup = actions.backup.takeIf { owner },
+                                reportsLocked = access.can(Perm.ViewReports) && !full.unlocked("reports", features),
                                 prices = { pricesOpen = true }.takeIf {
                                     access.can(Perm.SetPrices) && (Module.Ps in shop.modules || Module.Electricity in shop.modules)
                                 },

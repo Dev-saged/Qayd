@@ -21,7 +21,15 @@ val hasReleaseSigning = releaseStoreFile?.exists() == true
 val ciRunNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull()
 val baseVersionCode = (project.property("VERSION_CODE") as String).toInt()
 
+// ملاحظات الإصدارات تُضمَّن في التطبيق لصفحة "التحديثات"
+val releaseNotes by tasks.registering(Copy::class) {
+    from(rootProject.file("docs/releases"))
+    into(layout.buildDirectory.dir("generated/relnotes/releases"))
+}
+tasks.named("preBuild") { dependsOn(releaseNotes) }
+
 android {
+    sourceSets["main"].assets.srcDir(layout.buildDirectory.dir("generated/relnotes"))
     namespace = "dev.saged.qayd"
     compileSdk = 36
 
