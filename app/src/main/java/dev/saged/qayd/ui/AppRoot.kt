@@ -32,6 +32,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsTopHeight
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
@@ -109,7 +111,7 @@ fun AppRoot(vm: AppViewModel = viewModel()) {
         }
         // حدّ ثابت خلف شريط الإشعارات حتى لا يمر المحتوى تحته عند التمرير
         Box(
-            Modifier.fillMaxWidth().windowInsetsTopHeight(androidx.compose.foundation.layout.WindowInsets.statusBars)
+            Modifier.fillMaxWidth().windowInsetsTopHeight(WindowInsets.statusBars)
                 .background(LocalPalette.current.bg),
         )
         dev.saged.qayd.ui.updates.UpdateLayer(Modifier.align(Alignment.TopCenter))
