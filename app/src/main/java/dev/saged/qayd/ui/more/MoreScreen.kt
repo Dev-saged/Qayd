@@ -94,6 +94,7 @@ fun MoreScreen(
         }
 
         Column(Modifier.entrance(2).fillMaxWidth().clip(shape).background(p.surface).border(1.dp, p.line, shape).padding(6.dp)) {
+            nav.reports?.let { ActionRow(QIcons.Chart, "التقارير", "مبيعات الأسبوع، صافي الشهر، أكبر المدينين، وأداء الفريق", onClick = it) }
             nav.power?.let { ActionRow(QIcons.Bolt, "الكهرباء", "المشتركون وجولة القراءات وفواتير الشهر", onClick = it) }
             nav.expenses?.let { ActionRow(QIcons.Wallet, "المصروفات", "بضاعة، إنترنت، كهرباء، إيجار، ودفعات شهرية ثابتة", onClick = it) }
             nav.team?.let { ActionRow(QIcons.Users, "الفريق والصلاحيات", "وردية اليوم لكل عضو، وصلاحياته، وإيقافه", onClick = it) }
@@ -103,6 +104,8 @@ fun MoreScreen(
                 ActionRow(QIcons.Edit, "اسم المحل", shop.name) { onClearOp(); sheet = MoreSheet.Rename }
                 ActionRow(QIcons.UserPlus, "إضافة موظف", "حساب دخول جديد على نطاق ⁦@${shop.suffix}⁩") { onClearOp(); sheet = MoreSheet.Staff }
             }
+            nav.backup?.let { ActionRow(QIcons.Shield, "نسخة احتياطية", "ملف بكل الزبائن والحركات والقراءات تحفظه أو ترسله", onClick = it) }
+            LockRow()
             ActionRow(QIcons.Logout, "تسجيل الخروج", danger = true, onClick = onSignOut)
         }
 
@@ -155,4 +158,15 @@ private fun StaffSheet(suffix: String, op: Op, onAdd: (String, String, String) -
             }, busy = op.busy, busyText = "جارٍ الإضافة…")
         }
     }
+}
+
+@Composable
+private fun LockRow() {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    if (!dev.saged.qayd.system.AppLock.available(ctx)) return
+    var on by androidx.compose.runtime.remember { mutableStateOf(dev.saged.qayd.system.AppLock.enabled(ctx)) }
+    dev.saged.qayd.ui.components.QSwitchRow("قفل التطبيق بالبصمة", on, {
+        on = it
+        dev.saged.qayd.system.AppLock.setEnabled(ctx, it)
+    }, Modifier.padding(horizontal = 6.dp))
 }

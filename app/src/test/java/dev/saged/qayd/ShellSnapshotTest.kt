@@ -24,6 +24,11 @@ import dev.saged.qayd.ui.Op
 import dev.saged.qayd.ui.admin.AdminScreen
 import dev.saged.qayd.ui.auth.LoginScreen
 import dev.saged.qayd.data.AmountInput
+import dev.saged.qayd.data.PowerState
+import dev.saged.qayd.data.Reading
+import dev.saged.qayd.data.Templates
+import dev.saged.qayd.data.report
+import dev.saged.qayd.ui.reports.ReportsPage
 import dev.saged.qayd.data.Customer
 import dev.saged.qayd.data.ExpenseCategory
 import dev.saged.qayd.data.Ledger
@@ -157,6 +162,29 @@ class ShellSnapshotTest {
         assertTrue(ledger.recurring.first { it.item.id == "r2" }.paid == null)
         assertEquals(1286.4 - 200.0, ledger.debtTrend.last().toDouble(), 0.01)
     }
+
+    @Test fun powerBill() {
+        val (kwh, amount) = PowerState.bill(100.0, 101.2, 30.0)
+        assertEquals(1.2, kwh, 0.0001)
+        assertEquals(36.0, amount, 0.0001)
+        val sub = Customer("p1", "مشترك", "059", "", now, power = true, meter = "A1", initialReading = 100.0)
+        val st = PowerState.of(listOf(sub), listOf(Reading("r1", "p1", 100.0, 150.0, 50.0, 2.0, 100.0, Ledger.period(now), now, "")), now)
+        assertEquals(0, st.pending)
+        assertEquals(150.0, st.subscribers.first().last, 0.001)
+        assertEquals(100.0, st.monthAmount, 0.001)
+    }
+
+    @Test fun templatesAndReport() {
+        val text = Templates.fill(Templates.BUILT_IN.first().body, mapOf("الاسم" to "محمود", "المحل" to "كفي الأنوار", "الرصيد" to "900 ₪"))
+        assertTrue(text.contains("محمود") && text.contains("900 ₪") && !text.contains("{"))
+        val r = ledger.report(now)
+        assertEquals(55.5, r.monthSales, 0.001)
+        assertEquals(1020.0, r.monthExpenses, 0.001)
+        assertEquals(r.income - r.monthExpenses, r.net, 0.001)
+        assertEquals("c1", r.topDebtors.first().customer.id)
+    }
+
+    @Test fun reportsPage() = snap("reports", true, page { ReportsPage(PaddingValues(top = 24.dp), ledger.report(now)) {} })
 
     @Test fun amountInput() {
         var t = ""

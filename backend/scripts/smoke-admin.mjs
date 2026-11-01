@@ -70,8 +70,22 @@ try {
   check('owner reads own shop', (await readAs(ownerA.idToken, `shops/${A}`)) === 200);
   check('owner cannot read other shop', (await readAs(ownerA.idToken, `shops/${B}`)) === 403);
   check('staff reads own shop', (await readAs(staffA.idToken, `shops/${A}`)) === 200);
-  check('staff writes shop data', (await writeAs(staffA.idToken, `shops/${A}/customers/c1`, { name: { stringValue: 'زبون' } })) === 200);
-  check('staff cannot write other shop data', (await writeAs(staffA.idToken, `shops/${B}/customers/c1`, { name: { stringValue: 'x' } })) === 403);
+  const by = (tok) => ({ stringValue: JSON.parse(Buffer.from(tok.split('.')[1], 'base64url').toString()).user_id });
+  check('staff adds customer', (await writeAs(staffA.idToken, `shops/${A}/customers/c1`, { name: { stringValue: 'زبون' }, by: by(staffA.idToken) })) === 200);
+  check('staff cannot forge author', (await writeAs(staffA.idToken, `shops/${A}/customers/c2`, { name: { stringValue: 'x' }, by: { stringValue: 'someone' } })) === 403);
+  check('staff cannot write other shop data', (await writeAs(staffA.idToken, `shops/${B}/customers/c1`, { name: { stringValue: 'x' }, by: by(staffA.idToken) })) === 403);
+  const tx = (kind) => ({ kind: { stringValue: kind }, amount: { doubleValue: 10 }, by: by(staffA.idToken), deleted: { booleanValue: false } });
+  check('staff records sale (default perm)', (await writeAs(staffA.idToken, `shops/${A}/tx/t1`, tx('sale'))) === 200);
+  check('staff records debt (default perm)', (await writeAs(staffA.idToken, `shops/${A}/tx/t2`, tx('debt'))) === 200);
+  check('staff cannot record expense', (await writeAs(staffA.idToken, `shops/${A}/tx/t3`, tx('expense'))) === 403);
+  check('staff cannot delete tx', (await writeAs(staffA.idToken, `shops/${A}/tx/t1?updateMask.fieldPaths=deleted`, { deleted: { booleanValue: true } })) === 403);
+  check('owner deletes tx', (await writeAs(ownerA.idToken, `shops/${A}/tx/t1?updateMask.fieldPaths=deleted`, { deleted: { booleanValue: true } })) === 200);
+  check('staff cannot set prices', (await writeAs(staffA.idToken, `shops/${A}/settings/prices`, { psRate: { doubleValue: 5 } })) === 403);
+  check('owner sets prices', (await writeAs(ownerA.idToken, `shops/${A}/settings/prices`, { psRate: { doubleValue: 5 } })) === 200);
+  check('staff runs PS screen (module on)', (await writeAs(staffA.idToken, `shops/${A}/ps/1`, { bookedMinutes: { integerValue: '60' } })) === 200);
+  check('SMS blocked when module off', (await writeAs(staffA.idToken, `shops/${A}/smsQueue/m1`, { to: { stringValue: '0599' }, by: by(staffA.idToken) })) === 403);
+  check('owner disables staff', (await writeAs(ownerA.idToken, `shops/${A}/members/${staff.body.uid}?updateMask.fieldPaths=active`, { active: { booleanValue: false } })) === 200);
+  check('disabled staff cannot write', (await writeAs(staffA.idToken, `shops/${A}/tx/t4`, tx('sale'))) === 403);
   check('staff cannot edit members', (await writeAs(staffA.idToken, `shops/${A}/members/${staff.body.uid}`, { role: { stringValue: 'owner' } })) === 403);
   check('staff cannot rename shop', (await writeAs(staffA.idToken, `shops/${A}?updateMask.fieldPaths=name`, { name: { stringValue: 'x' } })) === 403);
   check('owner renames shop', (await writeAs(ownerA.idToken, `shops/${A}?updateMask.fieldPaths=name`, { name: { stringValue: 'محل أ — جديد' } })) === 200);
@@ -85,7 +99,7 @@ try {
   for (const id of created.shops.filter(Boolean)) {
     const members = await call(t, `${docs}/shops/${id}/members`).catch(() => ({}));
     for (const d of members.documents || []) await call(t, `https://firestore.googleapis.com/v1/${d.name}`, 'DELETE').catch(() => {});
-    await del(`shops/${id}/customers/c1`);
+    for (const sub of ['customers/c1', 'tx/t1', 'tx/t2', 'settings/prices', 'ps/1']) await del(`shops/${id}/${sub}`);
     await del(`shops/${id}`);
   }
   for (const s of created.suffixes) await del(`suffixes/${s}`);

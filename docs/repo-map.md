@@ -46,6 +46,7 @@
 ## Changes
 - v0.1.0: shell + home (direction A), icon, CI, per-build releases.
 - v0.2.0: Firebase auth + offline session, super admin panel, staff creation, shop rename, sync chip, Worker + rules.
+- v1.0.0: data/Reports.kt + ui/reports, system/AppLock (biometric, FragmentActivity), system/Backup (JSON share), system/Updater (Worker /v1/app/latest + /v1/app/apk from KV QAYD_APP, uploaded by CI), UpdateBanner + LockScreen in AppRoot.
 - v0.9.0: FEATURES + Shop.paid/unlocked/featureOn/daysLeft, config/features (free|paid), AdminScreen EditShopSheet + features sheet, LockedCard (WhatsApp owner), shell filters locked modules.
 - v0.8.0: pdf/QaydPdf.kt (PdfDocument + StaticLayout RTL, statement A4 paged, receipt 80mm, zxing QR, FileProvider share).
 - v0.7.0: data/Sms.kt (SmsMsg, Gateway, Templates.fill), gateway/GatewayService (FGS specialUse: claims queued msgs by transaction, sends via SmsManager, heartbeat gateway/main), ui/messages (MessagesScreen, SendSheet, TemplatesPage, smsVars).

@@ -112,3 +112,16 @@ jobs:
           gh release create "$TAG" "dist/Qayd-$TAG.apk" \
             --title "قيد $VERSION — بناء $GITHUB_RUN_NUMBER" \
             --notes-file /tmp/notes.md --target "$(git rev-parse HEAD)" --latest
+
+      - name: Publish in-app update
+        if: github.ref_name == 'main' && steps.sign.outputs.signed == 'true'
+        run: |
+          set -a; . secrets/backend.env; set +a
+          VERSION=$(grep '^VERSION_NAME=' gradle.properties | cut -d= -f2)
+          BASE=$(grep '^VERSION_CODE=' gradle.properties | cut -d= -f2)
+          CODE=$((BASE + GITHUB_RUN_NUMBER))
+          NOTES=$(python3 -c "import json,sys; print(json.dumps(open(sys.argv[1]).read() if __import__('os').path.exists(sys.argv[1]) else ''))" "docs/releases/v$VERSION.md")
+          echo "{\"version\":\"$VERSION\",\"build\":$GITHUB_RUN_NUMBER,\"code\":$CODE,\"notes\":$NOTES}" > /tmp/meta.json
+          cd backend/worker
+          npx -y wrangler@4 kv key put apk --binding=QAYD_APP --path="$GITHUB_WORKSPACE/dist/Qayd-v${VERSION}-b${GITHUB_RUN_NUMBER}.apk" --remote
+          npx -y wrangler@4 kv key put meta --binding=QAYD_APP --path=/tmp/meta.json --remote

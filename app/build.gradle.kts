@@ -112,6 +112,7 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.zxing.core)
+    implementation(libs.androidx.biometric)
 
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

@@ -7,3 +7,8 @@ workers_dev = true
 PROJECT_ID = "qayd-ps"
 
 # السر FIREBASE_SA (مفتاح الخدمة JSON) يُضاف بـ: wrangler secret put FIREBASE_SA
+
+# آخر APK ومعلوماته للتحديث الذاتي (يكتبها GitHub Actions)
+[[kv_namespaces]]
+binding = "QAYD_APP"
+id = "6a9875057fbd4b10823a1f22e8ea02e7"

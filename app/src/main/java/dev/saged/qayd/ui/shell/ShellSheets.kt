@@ -73,6 +73,7 @@ class ShopActions(
     val saveTemplate: (String?, String, String, TemplateKind) -> Unit = { _, _, _, _ -> },
     val deleteTemplate: (String) -> Unit = {},
     val gateway: (Boolean) -> Unit = {},
+    val backup: () -> Unit = {},
 ) {
     companion object {
         val None = ShopActions({}, { _, _ -> }, { _, _ -> }, { _, _, _ -> }, {}, { _, _ -> "" }, { _, _, _ -> }, {})

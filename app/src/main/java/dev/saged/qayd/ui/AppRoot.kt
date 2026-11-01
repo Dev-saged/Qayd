@@ -30,6 +30,26 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.Role as SemRole
+import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import dev.saged.qayd.data.Customer
+import dev.saged.qayd.data.Reading
+import dev.saged.qayd.data.Template
+import dev.saged.qayd.system.AppLock
+import dev.saged.qayd.system.AppUpdate
+import dev.saged.qayd.system.Backup
+import dev.saged.qayd.system.Updater
+import kotlinx.coroutines.launch
 import dev.saged.qayd.data.Access
 import dev.saged.qayd.data.Module
 import dev.saged.qayd.data.PowerState
@@ -62,6 +82,31 @@ import dev.saged.qayd.ui.theme.LocalPalette
 @Composable
 fun AppRoot(vm: AppViewModel = viewModel()) {
     val session by vm.session.collectAsStateWithLifecycle()
+    val ctx = LocalContext.current
+    var locked by remember { mutableStateOf(AppLock.enabled(ctx)) }
+    var hiddenAt by remember { mutableStateOf(0L) }
+    val owner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        val obs = LifecycleEventObserver { _, e ->
+            when (e) {
+                Lifecycle.Event.ON_STOP -> hiddenAt = System.currentTimeMillis()
+                Lifecycle.Event.ON_START -> if (AppLock.enabled(ctx) && AppLock.shouldLock(hiddenAt)) locked = true
+                else -> Unit
+            }
+        }
+        owner.lifecycle.addObserver(obs)
+        onDispose { owner.lifecycle.removeObserver(obs) }
+    }
+    if (locked && session is Session.Active) return LockScreen { (ctx as? FragmentActivity)?.let { AppLock.prompt(it) { locked = false } } }
+
+    Box(Modifier.fillMaxSize()) {
+        AppContent(vm, session)
+        UpdateBanner(Modifier.align(Alignment.TopCenter))
+    }
+}
+
+@Composable
+private fun AppContent(vm: AppViewModel, session: Session) {
     when (val s = session) {
         Session.Loading -> Splash()
         Session.SignedOut -> {
@@ -127,7 +172,9 @@ private fun ShopRoot(vm: AppViewModel, account: Account) {
             val queue by remember(shop.id) { vm.repo.smsQueue(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val templates by remember(shop.id) { vm.repo.templates(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val features by remember { vm.repo.features() }.collectAsStateWithLifecycle(emptyMap())
-            val actions = remember(shop.id, ledger, prices) { shopActions(vm, shop.id, ledger, prices, ctx) }
+            val actions = remember(shop.id, ledger, prices, customers, readings, templates) {
+                shopActions(vm, shop.id, ledger, prices, ctx, customers, readings, templates)
+            }
             val members by remember(shop.id) { vm.repo.members(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val audit by remember(shop.id, account.role) {
                 if (account.role == Role.Owner) vm.repo.audit(shop.id) else kotlinx.coroutines.flow.flowOf(emptyList())
@@ -161,7 +208,10 @@ private fun rememberLedger(vm: AppViewModel, shopId: String): Ledger {
     }
 }
 
-private fun shopActions(vm: AppViewModel, shopId: String, ledger: Ledger, prices: Prices, ctx: android.content.Context) = vm.repo.let { r ->
+private fun shopActions(
+    vm: AppViewModel, shopId: String, ledger: Ledger, prices: Prices, ctx: android.content.Context,
+    customers: List<Customer>, readings: List<Reading>, templates: List<Template>,
+) = vm.repo.let { r ->
     ShopActions(
         sale = { r.addTx(shopId, TxKind.Sale, it) },
         debt = { c, v -> r.addTx(shopId, TxKind.Debt, v, customerId = c) },
@@ -184,7 +234,58 @@ private fun shopActions(vm: AppViewModel, shopId: String, ledger: Ledger, prices
         saveTemplate = { id, t, b, k -> r.saveTemplate(shopId, id, t, b, k) },
         deleteTemplate = { r.deleteTemplate(shopId, it) },
         gateway = { on -> if (on) GatewayService.start(ctx, shopId) else GatewayService.stop(ctx) },
+        backup = { runCatching { Backup.share(ctx, Backup.write(ctx, shopId, ledger, customers, readings, templates)) } },
     )
+}
+
+@Composable
+private fun LockScreen(onUnlock: () -> Unit) {
+    val p = LocalPalette.current
+    LaunchedEffect(Unit) { onUnlock() }
+    Box(Modifier.fillMaxSize().background(p.bg)) {
+        Ambient()
+        Column(Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+            Box(Modifier.size(72.dp).clip(RoundedCornerShape(24.dp)).background(p.surface2), contentAlignment = Alignment.Center) {
+                QIcon(QIcons.Lock, p.pri, Modifier.size(32.dp))
+            }
+            Spacer(Modifier.height(18.dp))
+            T("قيد مقفل", size = 20.sp, weight = FontWeight.SemiBold)
+            T("افتح بالبصمة أو برمز قفل الجوال", size = 13.5.sp, color = p.mute)
+            Spacer(Modifier.height(24.dp))
+            QButton("افتح", onUnlock)
+        }
+    }
+}
+
+/** شريط التحديث: يظهر عند توفر نسخة أحدث، وينزّلها ويفتح التثبيت. */
+@Composable
+private fun UpdateBanner(modifier: Modifier) {
+    val p = LocalPalette.current
+    val ctx = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var update by remember { mutableStateOf<AppUpdate?>(null) }
+    var progress by remember { mutableStateOf<Float?>(null) }
+    var hidden by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { update = Updater.check() }
+    val u = update ?: return
+    if (hidden) return
+    Row(
+        modifier.statusBarsPadding().padding(12.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.pri)
+            .clickable(role = SemRole.Button) {
+                if (progress == null) scope.launch {
+                    progress = 0f
+                    runCatching { Updater.install(ctx, Updater.download(ctx) { progress = it }) }
+                    progress = null
+                }
+            }.padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            T("تحديث جديد ${u.version} (بناء ${u.build})", size = 14.sp, weight = FontWeight.SemiBold, color = p.onPri)
+            T(progress?.let { "جارٍ التنزيل ${(it * 100).toInt()}%" } ?: "اضغط للتنزيل والتثبيت", size = 12.sp, color = p.onPri)
+        }
+        T("لاحقاً", Modifier.clip(RoundedCornerShape(10.dp)).clickable(role = SemRole.Button) { hidden = true }.padding(8.dp), 12.5.sp, FontWeight.Medium, p.onPri)
+    }
 }
 
 @Composable

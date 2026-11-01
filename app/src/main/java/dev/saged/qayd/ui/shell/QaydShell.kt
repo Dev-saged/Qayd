@@ -15,6 +15,8 @@ import dev.saged.qayd.data.Template
 import dev.saged.qayd.data.Templates
 import dev.saged.qayd.gateway.GatewayService
 import dev.saged.qayd.pdf.QaydPdf
+import dev.saged.qayd.data.report
+import dev.saged.qayd.ui.reports.ReportsPage
 import dev.saged.qayd.ui.messages.MessagesScreen
 import dev.saged.qayd.ui.messages.SendSheet
 import dev.saged.qayd.ui.messages.TemplatesPage
@@ -114,6 +116,7 @@ private sealed interface Page {
     data object Audit : Page
     data object Power : Page
     data object Templates : Page
+    data object Reports : Page
 }
 
 /** تنقل صفحات "المزيد". */
@@ -123,6 +126,8 @@ class MoreNav(
     val audit: (() -> Unit)?,
     val prices: (() -> Unit)? = null,
     val power: (() -> Unit)? = null,
+    val reports: (() -> Unit)? = null,
+    val backup: (() -> Unit)? = null,
 )
 
 @Composable
@@ -203,6 +208,7 @@ fun QaydShell(
                     }
                     Page.Team -> TeamPage(pad0, members, ledger, onBack = { page = null }, onAdd = { tab = Tab.More; page = null }, onSave = actions.updateMember)
                     Page.Audit -> AuditPage(pad0, audit, onBack = { page = null })
+                    Page.Reports -> ReportsPage(pad0, ledger.report(System.currentTimeMillis()), onBack = { page = null })
                     Page.Templates -> TemplatesPage(pad0, templates, onBack = { page = null }, onSave = actions.saveTemplate, onDelete = actions.deleteTemplate)
                     Page.Power -> PowerPage(
                         pad0, power, prices.kwhPrice, access.can(Perm.RecordReadings), access.can(Perm.ManageElectricity),
@@ -247,6 +253,8 @@ fun QaydShell(
                                 team = { page = Page.Team }.takeIf { owner },
                                 audit = { page = Page.Audit }.takeIf { owner },
                                 power = { page = Page.Power }.takeIf { Module.Electricity in shop.modules },
+                                reports = { page = Page.Reports }.takeIf { access.can(Perm.ViewReports) && full.unlocked("reports", features) },
+                                backup = actions.backup.takeIf { owner },
                                 prices = { pricesOpen = true }.takeIf {
                                     access.can(Perm.SetPrices) && (Module.Ps in shop.modules || Module.Electricity in shop.modules)
                                 },

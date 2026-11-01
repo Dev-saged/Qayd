@@ -1,19 +1,17 @@
 # session-handoff
 
 ## State
-- v0.3.0: quick sale (in-app numpad), customers + debts + customer page, expenses + recurring monthly payments, seal icon.
-- v0.2.0 base: Firebase login/offline, super admin panel, staff creation, shop rename, sync chip.
-- Backend live: rules + Worker qayd-admin; smoke test passes. Keys in secrets/ (private repo); CI signs and releases every main build.
+- v1.0.0 released: all roadmap phases done (shell, auth/offline, quick sale + numpad, customers/debts, expenses + recurring, team/perms/audit, PlayStation sync + alarms, electricity rounds, SMS gateway + templates, PDF statements/receipts, owner panel + paid features, reports, biometric lock, backup, self-update).
+- Backend: rules enforce perms/features/isolation; Worker qayd-admin (shops, staff, app updates from KV). smoke-admin.mjs 31/31 passing.
+- Keys in secrets/ (private repo). CI signs, releases, and publishes the APK to KV on every main build.
 
 ## Decisions
-- Name قيد / Qayd, package dev.saged.qayd, Firebase qayd-ps, one project for all shops.
-- Amounts only via in-app numpad (never the phone keyboard); names/search use the system keyboard.
-- Balance derived from tx (debt − payment); negative = credit for the customer.
-- Expenses UI is owner-only; Firestore rules still allow any shop member (tighten in v0.4.0 with perms).
+- SMS: Firestore queue + in-app gateway service (not LAN HTTP).
+- Self-update via Worker KV because the repo is private.
+- Paid features: config/features free|paid + shops.paid; enforced in rules for ps/electricity/sms.
 
-## Open
-- Staff permission matrix not enforced yet (rules + UI) — v0.4.0.
-- Customer statement / PDF — v0.8.0. PlayStation sessions still local-only — v0.5.0.
+## Open (after 1.0)
+- Meter OCR, PS screen transfer, iOS. Device testing by Sajed.
 
 ## Next step
-- v0.4.0: team & permissions (matrix, enforce in rules), audit log, shifts.
+- Fix issues Sajed reports from real-device testing.

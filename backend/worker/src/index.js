@@ -231,6 +231,17 @@ export default {
     const { pathname } = new URL(request.url);
     try {
       if (request.method === 'GET' && pathname === '/v1/health') return json(200, { ok: true });
+      if (request.method === 'GET' && pathname === '/v1/app/latest') {
+        const meta = await env.QAYD_APP.get('meta', 'json');
+        return json(meta ? 200 : 404, meta || { error: 'none' });
+      }
+      if (request.method === 'GET' && pathname === '/v1/app/apk') {
+        const apk = await env.QAYD_APP.get('apk', 'arrayBuffer');
+        if (!apk) return json(404, { error: 'none' });
+        return new Response(apk, {
+          headers: { 'content-type': 'application/vnd.android.package-archive', 'content-disposition': 'attachment; filename="Qayd.apk"' },
+        });
+      }
       if (request.method !== 'POST') throw new Fail(405, 'method', 'غير مسموح');
       if (!env.sa) env.sa = JSON.parse(env.FIREBASE_SA);
       const caller = await verifyIdToken(env, (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, ''));
