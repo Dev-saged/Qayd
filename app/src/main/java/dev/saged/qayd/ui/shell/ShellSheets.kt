@@ -30,6 +30,7 @@ import dev.saged.qayd.data.Customer
 import dev.saged.qayd.data.Member
 import dev.saged.qayd.data.Perm
 import dev.saged.qayd.data.Prices
+import dev.saged.qayd.data.TemplateKind
 import dev.saged.qayd.ui.home.PsSlot
 import dev.saged.qayd.ui.util.cur
 import dev.saged.qayd.data.CustomerBalance
@@ -67,6 +68,11 @@ class ShopActions(
     val setPrice: (String, Double) -> Unit = { _, _ -> },
     val addReading: (String, Double, Double) -> Unit = { _, _, _ -> },
     val addSubscriber: (String, String, String, Double) -> Unit = { _, _, _, _ -> },
+    val enqueueSms: (List<Triple<String, String, String>>, String) -> Unit = { _, _ -> },
+    val retrySms: (String) -> Unit = {},
+    val saveTemplate: (String?, String, String, TemplateKind) -> Unit = { _, _, _, _ -> },
+    val deleteTemplate: (String) -> Unit = {},
+    val gateway: (Boolean) -> Unit = {},
 ) {
     companion object {
         val None = ShopActions({}, { _, _ -> }, { _, _ -> }, { _, _, _ -> }, {}, { _, _ -> "" }, { _, _, _ -> }, {})

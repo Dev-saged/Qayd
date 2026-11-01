@@ -58,6 +58,7 @@ fun CustomerPage(
     onPayment: (() -> Unit)?,
     onTxTap: (Tx) -> Unit,
     showBalance: Boolean = true,
+    onSms: (() -> Unit)? = null,
 ) {
     val p = LocalPalette.current
     val ctx = LocalContext.current
@@ -107,6 +108,7 @@ fun CustomerPage(
             Row(Modifier.entrance(2), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (onDebt != null) QButton("دين", onDebt, Modifier.weight(1f))
                 if (onPayment != null) QButton("دفعة", onPayment, Modifier.weight(1f), secondary = true)
+                if (onSms != null && customer.phone.isNotBlank()) QButton("رسالة", onSms, Modifier.weight(1f), secondary = true)
             }
         }
         item { T("السجل", Modifier.entrance(3).padding(top = 6.dp), 14.5.sp, FontWeight.SemiBold) }

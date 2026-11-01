@@ -34,6 +34,8 @@ import dev.saged.qayd.data.Access
 import dev.saged.qayd.data.Module
 import dev.saged.qayd.data.PowerState
 import dev.saged.qayd.data.Prices
+import dev.saged.qayd.data.Gateway
+import dev.saged.qayd.gateway.GatewayService
 import dev.saged.qayd.notify.PsAlarms
 import dev.saged.qayd.data.Account
 import dev.saged.qayd.data.Ledger
@@ -117,7 +119,10 @@ private fun ShopRoot(vm: AppViewModel, account: Account) {
             val readings by remember(shop.id) { vm.repo.readings(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val customers by remember(shop.id) { vm.repo.customers(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val power = remember(customers, readings) { PowerState.of(customers, readings, System.currentTimeMillis()) }
-            val actions = remember(shop.id, ledger, prices) { shopActions(vm, shop.id, ledger, prices) }
+            val gateway by remember(shop.id) { vm.repo.gateway(shop.id) }.collectAsStateWithLifecycle(Gateway.None)
+            val queue by remember(shop.id) { vm.repo.smsQueue(shop.id) }.collectAsStateWithLifecycle(emptyList())
+            val templates by remember(shop.id) { vm.repo.templates(shop.id) }.collectAsStateWithLifecycle(emptyList())
+            val actions = remember(shop.id, ledger, prices) { shopActions(vm, shop.id, ledger, prices, ctx) }
             val members by remember(shop.id) { vm.repo.members(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val audit by remember(shop.id, account.role) {
                 if (account.role == Role.Owner) vm.repo.audit(shop.id) else kotlinx.coroutines.flow.flowOf(emptyList())
@@ -125,7 +130,7 @@ private fun ShopRoot(vm: AppViewModel, account: Account) {
             val me = members.firstOrNull { it.uid == account.uid }
             val access = if (account.role == Role.Owner) Access.Full else Access(Role.Staff, me?.perms.orEmpty(), me?.active ?: true)
             if (!access.active) return Blocked("حسابك موقوف من صاحب المحل", vm::signOut)
-            QaydShell(shop, account, current.second, ledger, slots, actions, access, members, audit, prices, power) { pad, nav ->
+            QaydShell(shop, account, current.second, ledger, slots, actions, access, members, audit, prices, power, gateway, queue, templates) { pad, nav ->
                 MoreScreen(
                     padding = pad, shop = shop, account = account, sync = current.second, op = op,
                     onRename = { vm.repo.renameShop(shop.id, it) },
@@ -151,7 +156,7 @@ private fun rememberLedger(vm: AppViewModel, shopId: String): Ledger {
     }
 }
 
-private fun shopActions(vm: AppViewModel, shopId: String, ledger: Ledger, prices: Prices) = vm.repo.let { r ->
+private fun shopActions(vm: AppViewModel, shopId: String, ledger: Ledger, prices: Prices, ctx: android.content.Context) = vm.repo.let { r ->
     ShopActions(
         sale = { r.addTx(shopId, TxKind.Sale, it) },
         debt = { c, v -> r.addTx(shopId, TxKind.Debt, v, customerId = c) },
@@ -169,6 +174,11 @@ private fun shopActions(vm: AppViewModel, shopId: String, ledger: Ledger, prices
         setPrice = { k, v -> r.setPrice(shopId, k, v) },
         addReading = { c, prev, curr -> r.addReading(shopId, c, prev, curr, prices.kwhPrice) },
         addSubscriber = { n, ph, m, v -> r.addSubscriber(shopId, n, ph, m, v) },
+        enqueueSms = { items, t -> r.enqueueSms(shopId, items, t) },
+        retrySms = { r.retrySms(shopId, it) },
+        saveTemplate = { id, t, b, k -> r.saveTemplate(shopId, id, t, b, k) },
+        deleteTemplate = { r.deleteTemplate(shopId, it) },
+        gateway = { on -> if (on) GatewayService.start(ctx, shopId) else GatewayService.stop(ctx) },
     )
 }
 

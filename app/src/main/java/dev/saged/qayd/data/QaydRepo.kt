@@ -308,6 +308,59 @@ class QaydRepo(context: Context) {
         if (amount > 0) addTx(shopId, TxKind.Debt, amount, customerId = customerId, source = "power", ref = ref.id)
     }
 
+    /* ---------- الرسائل ---------- */
+
+    fun smsQueue(shopId: String): Flow<List<SmsMsg>> = listen("shops/$shopId/smsQueue") {
+        SmsMsg(
+            it.id, it.getString("to").orEmpty(), it.getString("text").orEmpty(), it.getString("name").orEmpty(),
+            it.getString("template").orEmpty(), SmsStatus.of(it.getString("status")), it.getString("error").orEmpty(),
+            it.millis("at"), it.getString("byName").orEmpty(),
+        )
+    }
+
+    fun gateway(shopId: String): Flow<Gateway> = callbackFlow {
+        val reg = db.document("shops/$shopId/gateway/main").addSnapshotListener { s, _ ->
+            trySend(
+                if (s == null || !s.exists()) Gateway.None
+                else Gateway(s.getBoolean("online") == true, s.getString("device").orEmpty(), s.millis("lastSeen"), s.getString("uid").orEmpty()),
+            )
+        }
+        awaitClose { reg.remove() }
+    }
+
+    fun templates(shopId: String): Flow<List<Template>> = listen("shops/$shopId/templates") {
+        Template(it.id, it.getString("title").orEmpty(), it.getString("body").orEmpty(),
+            TemplateKind.entries.firstOrNull { k -> k.name == it.getString("kind") } ?: TemplateKind.General)
+    }
+
+    fun saveTemplate(shopId: String, id: String?, title: String, body: String, kind: TemplateKind) {
+        val ref = if (id == null) db.collection("shops/$shopId/templates").document() else db.document("shops/$shopId/templates/$id")
+        ref.set(stamp() + mapOf("title" to title.trim(), "body" to body.trim(), "kind" to kind.name))
+    }
+
+    fun deleteTemplate(shopId: String, id: String) {
+        db.document("shops/$shopId/templates/$id").update(mapOf("deleted" to true, "updatedAt" to FieldValue.serverTimestamp()))
+    }
+
+    /** تُضاف الرسائل للطابور؛ جوال الإرسال يلتقطها ويرسلها ويحدّث حالتها. */
+    fun enqueueSms(shopId: String, items: List<Triple<String, String, String>>, template: String) {
+        val now = ts(System.currentTimeMillis())
+        items.chunked(400).forEach { chunk ->
+            val batch = db.batch()
+            chunk.forEach { (to, name, text) ->
+                batch.set(
+                    db.collection("shops/$shopId/smsQueue").document(),
+                    stamp() + mapOf("to" to to, "name" to name, "text" to text, "template" to template, "status" to "queued", "attempts" to 0, "at" to now),
+                )
+            }
+            batch.commit()
+        }
+    }
+
+    fun retrySms(shopId: String, id: String) {
+        db.document("shops/$shopId/smsQueue/$id").update(mapOf("status" to "queued", "error" to "", "updatedAt" to FieldValue.serverTimestamp()))
+    }
+
     /* ---------- الأسعار وشاشات PlayStation ---------- */
 
     fun prices(shopId: String): Flow<Prices> = callbackFlow {

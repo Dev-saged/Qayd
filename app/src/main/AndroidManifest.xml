@@ -63,5 +63,14 @@
         </activity>
 
         <receiver android:name=".notify.PsAlarmReceiver" android:exported="false" />
+
+        <service
+            android:name=".gateway.GatewayService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Sends the shop's queued SMS messages from this phone's SIM on the owner's request" />
+        </service>
     </application>
 </manifest>

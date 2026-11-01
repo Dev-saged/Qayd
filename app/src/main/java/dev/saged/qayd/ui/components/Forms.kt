@@ -65,6 +65,7 @@ fun QField(
     enabled: Boolean = true,
     onDone: (() -> Unit)? = null,
     suffix: String? = null,
+    lines: Int = 1,
 ) {
     val p = LocalPalette.current
     val source = remember { MutableInteractionSource() }
@@ -85,7 +86,7 @@ fun QField(
                 .clip(shape)
                 .background(p.surface)
                 .border(if (focused) 1.5.dp else 1.dp, border, shape)
-                .padding(horizontal = 14.dp),
+                .padding(horizontal = 14.dp, vertical = if (lines > 1) 12.dp else 0.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             CompositionLocalProvider(LocalLayoutDirection provides if (ltr) LayoutDirection.Ltr else LayoutDirection.Rtl) {
@@ -96,7 +97,9 @@ fun QField(
                             value = value,
                             onValueChange = onChange,
                             enabled = enabled,
-                            singleLine = true,
+                            singleLine = lines == 1,
+                            minLines = lines,
+                            maxLines = if (lines == 1) 1 else lines + 6,
                             interactionSource = source,
                             textStyle = TextStyle(fontFamily = Readex, fontSize = 15.sp, color = p.ink),
                             cursorBrush = SolidColor(p.pri),

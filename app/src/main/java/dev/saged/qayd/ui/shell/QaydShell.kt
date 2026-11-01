@@ -9,6 +9,16 @@ import dev.saged.qayd.data.Module
 import dev.saged.qayd.data.Perm
 import dev.saged.qayd.data.PowerState
 import dev.saged.qayd.data.Prices
+import dev.saged.qayd.data.Gateway
+import dev.saged.qayd.data.SmsMsg
+import dev.saged.qayd.data.Template
+import dev.saged.qayd.data.Templates
+import dev.saged.qayd.gateway.GatewayService
+import dev.saged.qayd.ui.messages.MessagesScreen
+import dev.saged.qayd.ui.messages.SendSheet
+import dev.saged.qayd.ui.messages.TemplatesPage
+import dev.saged.qayd.ui.messages.smsVars
+import androidx.compose.ui.platform.LocalContext
 import dev.saged.qayd.ui.power.PowerPage
 import dev.saged.qayd.ui.ps.PsSessionSheet
 import dev.saged.qayd.ui.ps.PsStartSheet
@@ -101,6 +111,7 @@ private sealed interface Page {
     data object Team : Page
     data object Audit : Page
     data object Power : Page
+    data object Templates : Page
 }
 
 /** تنقل صفحات "المزيد". */
@@ -125,6 +136,9 @@ fun QaydShell(
     audit: List<AuditEntry> = emptyList(),
     prices: Prices = Prices.None,
     power: PowerState = PowerState.Empty,
+    gateway: Gateway = Gateway.None,
+    queue: List<SmsMsg> = emptyList(),
+    templates: List<Template> = emptyList(),
     more: @Composable (PaddingValues, MoreNav) -> Unit,
 ) {
     val p = LocalPalette.current
@@ -138,6 +152,10 @@ fun QaydShell(
     var psOpen by remember { mutableStateOf<PsSlot?>(null) }
     var psDebt by remember { mutableStateOf<PsSlot?>(null) }
     var pricesOpen by rememberSaveable { mutableStateOf(false) }
+    var smsFor by remember { mutableStateOf<String?>(null) }
+    val ctx = LocalContext.current
+    var gatewayHere by remember { mutableStateOf(GatewayService.isOn(ctx)) }
+    val allTemplates = Templates.BUILT_IN + templates
     val owner = account.role == dev.saged.qayd.data.Role.Owner
     val tap: (Tx) -> Unit = { if (access.can(Perm.DeleteTx)) confirm = it }
     val top = WindowInsets.statusBars.asPaddingValues()
@@ -164,12 +182,14 @@ fun QaydShell(
                                 onDebt = { pad = PadRequest.Debt(c) }.takeIf { access.can(Perm.AddDebt) },
                                 onPayment = { pad = PadRequest.Payment(c) }.takeIf { access.can(Perm.AddPayment) },
                                 showBalance = access.can(Perm.ViewBalances),
+                                onSms = { smsFor = c.id }.takeIf { access.can(Perm.SendSms) && Module.Sms in shop.modules },
                                 onTxTap = tap,
                             )
                         }
                     }
                     Page.Team -> TeamPage(pad0, members, ledger, onBack = { page = null }, onAdd = { tab = Tab.More; page = null }, onSave = actions.updateMember)
                     Page.Audit -> AuditPage(pad0, audit, onBack = { page = null })
+                    Page.Templates -> TemplatesPage(pad0, templates, onBack = { page = null }, onSave = actions.saveTemplate, onDelete = actions.deleteTemplate)
                     Page.Power -> PowerPage(
                         pad0, power, prices.kwhPrice, access.can(Perm.RecordReadings), access.can(Perm.ManageElectricity),
                         onBack = { page = null }, onOpenCustomer = { page = Page.CustomerDetail(it) },
@@ -193,7 +213,16 @@ fun QaydShell(
                             pad0, ledger, access.can(Perm.ViewBalances), onOpen = { page = Page.CustomerDetail(it.id) },
                             onAdd = { addingCustomer = true }.takeIf { access.can(Perm.ManageCustomers) },
                         )
-                        Tab.Messages -> EmptyTab(pad0, QIcons.Msg, "طابور الرسائل فارغ", "كل رسالة تُرسل لمدين أو مشترك تظهر هنا بحالتها: بالانتظار، أُرسلت، وصلت.")
+                        Tab.Messages -> if (Module.Sms in shop.modules) {
+                            MessagesScreen(
+                                pad0, shop, gateway, queue, ledger, power, allTemplates,
+                                canSend = access.can(Perm.SendSms), canTemplates = access.can(Perm.ManageTemplates), gatewayHere = gatewayHere,
+                                onGateway = { on -> gatewayHere = on; actions.gateway(on) }, onRetry = actions.retrySms,
+                                onEnqueue = actions.enqueueSms, onTemplates = { page = Page.Templates },
+                            )
+                        } else {
+                            EmptyTab(pad0, QIcons.Msg, "الرسائل غير مفعّلة", "تواصل مع مالك المنصة لتفعيل وحدة الرسائل لمحلك.")
+                        }
                         Tab.More -> more(
                             pad0,
                             MoreNav(
@@ -271,6 +300,18 @@ fun QaydShell(
             initial = AmountInput.of(r.current), onDismiss = { pad = null },
         ) { v, _ -> actions.setPrice(r.key, v) }
         null -> Unit
+    }
+
+    smsFor?.let { id ->
+        val c = ledger.balanceOf(id)
+        if (c != null) {
+            val reading = power.subscribers.firstOrNull { it.customer.id == id }?.history?.firstOrNull()
+            SendSheet(
+                "رسالة إلى ${c.customer.name}", allTemplates, 1,
+                preview = { t -> Templates.fill(t.body, smsVars(shop, c, reading)) },
+                onSend = { t -> actions.enqueueSms(listOf(Triple(c.customer.phone, c.customer.name, Templates.fill(t.body, smsVars(shop, c, reading)))), t.title) },
+            ) { smsFor = null }
+        }
     }
 
     psOpen?.let { open ->
