@@ -59,6 +59,7 @@ fun CustomerPage(
     onTxTap: (Tx) -> Unit,
     showBalance: Boolean = true,
     onSms: (() -> Unit)? = null,
+    onPdf: (() -> Unit)? = null,
 ) {
     val p = LocalPalette.current
     val ctx = LocalContext.current
@@ -82,6 +83,7 @@ fun CustomerPage(
                     T(customer.name, size = 19.sp, weight = FontWeight.Bold)
                     if (customer.phone.isNotBlank()) T(ltr(customer.phone), size = 12.5.sp, color = p.mute)
                 }
+                if (onPdf != null) IconTile(QIcons.Receipt, "كشف حساب PDF", onPdf, Modifier.padding(end = 8.dp))
                 if (customer.phone.isNotBlank()) {
                     IconTile(QIcons.Phone, "اتصال", {
                         runCatching { ctx.startActivity(Intent(Intent.ACTION_DIAL, Uri.parse("tel:${customer.phone}"))) }

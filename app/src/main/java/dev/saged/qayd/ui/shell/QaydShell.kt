@@ -14,6 +14,7 @@ import dev.saged.qayd.data.SmsMsg
 import dev.saged.qayd.data.Template
 import dev.saged.qayd.data.Templates
 import dev.saged.qayd.gateway.GatewayService
+import dev.saged.qayd.pdf.QaydPdf
 import dev.saged.qayd.ui.messages.MessagesScreen
 import dev.saged.qayd.ui.messages.SendSheet
 import dev.saged.qayd.ui.messages.TemplatesPage
@@ -157,7 +158,8 @@ fun QaydShell(
     var gatewayHere by remember { mutableStateOf(GatewayService.isOn(ctx)) }
     val allTemplates = Templates.BUILT_IN + templates
     val owner = account.role == dev.saged.qayd.data.Role.Owner
-    val tap: (Tx) -> Unit = { if (access.can(Perm.DeleteTx)) confirm = it }
+    val tap: (Tx) -> Unit = { confirm = it }
+    val pdf = remember { QaydPdf(ctx) }
     val top = WindowInsets.statusBars.asPaddingValues()
     val pad0 = PaddingValues(top = top.calculateTopPadding())
 
@@ -183,6 +185,10 @@ fun QaydShell(
                                 onPayment = { pad = PadRequest.Payment(c) }.takeIf { access.can(Perm.AddPayment) },
                                 showBalance = access.can(Perm.ViewBalances),
                                 onSms = { smsFor = c.id }.takeIf { access.can(Perm.SendSms) && Module.Sms in shop.modules },
+                                onPdf = {
+                                    runCatching { pdf.share(pdf.statement(shop, c, ledger.history(c.id))) }
+                                    Unit
+                                }.takeIf { access.can(Perm.ExportPdf) },
                                 onTxTap = tap,
                             )
                         }
@@ -341,7 +347,18 @@ fun QaydShell(
     }
 
     confirm?.let { t ->
-        ConfirmDeleteSheet(t, t.customerId?.let { ledger.balanceOf(it)?.customer?.name }, onDelete = { actions.deleteTx(t) }) { confirm = null }
+        val cust = t.customerId?.let { ledger.balanceOf(it)?.customer }
+        ConfirmDeleteSheet(
+            t, cust?.name,
+            onDelete = { actions.deleteTx(t) }.takeIf { access.can(Perm.DeleteTx) },
+            onReceipt = {
+                val after = cust?.let { c ->
+                    ledger.history(c.id).filter { it.at <= t.at }.sumOf { if (it.kind == TxKind.Debt) it.amount else -it.amount }
+                }
+                runCatching { pdf.share(pdf.receipt(shop, t, cust, after)) }
+                Unit
+            }.takeIf { access.can(Perm.ExportPdf) },
+        ) { confirm = null }
     }
 }
 

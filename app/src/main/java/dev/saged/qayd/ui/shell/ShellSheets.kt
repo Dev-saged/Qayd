@@ -163,9 +163,9 @@ fun NewCustomerForm(initialName: String = "", onSave: (String, String) -> Unit) 
 }
 
 @Composable
-fun ConfirmDeleteSheet(tx: Tx, who: String?, onDelete: () -> Unit, onDismiss: () -> Unit) {
+fun ConfirmDeleteSheet(tx: Tx, who: String?, onDelete: (() -> Unit)?, onReceipt: (() -> Unit)?, onDismiss: () -> Unit) {
     val p = LocalPalette.current
-    QSheet("حذف الحركة", onDismiss) {
+    QSheet("الحركة", onDismiss) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             QIcon(QIcons.Trash, p.danger, Modifier.size(22.dp))
             T(
@@ -173,10 +173,14 @@ fun ConfirmDeleteSheet(tx: Tx, who: String?, onDelete: () -> Unit, onDismiss: ()
                 Modifier.padding(start = 10.dp), 15.sp, FontWeight.Medium, maxLines = 2,
             )
         }
-        T("تُحذف من الحسابات ويتغير الرصيد، ويبقى أثرها محفوظاً.", Modifier.padding(top = 8.dp), 13.sp, color = p.mute, maxLines = 2)
         Spacer(Modifier.height(18.dp))
-        QButton("احذف", { onDelete(); onDismiss() })
-        Spacer(Modifier.height(10.dp))
-        QButton("إلغاء", onDismiss, secondary = true)
+        if (onReceipt != null) {
+            QButton("إيصال PDF", { onReceipt(); onDismiss() })
+            Spacer(Modifier.height(10.dp))
+        }
+        if (onDelete != null) {
+            T("الحذف يغيّر الرصيد، ويبقى أثره في سجل التدقيق.", Modifier.padding(bottom = 8.dp), 12.5.sp, color = p.mute, maxLines = 2)
+            QButton("احذف الحركة", { onDelete(); onDismiss() }, secondary = true)
+        }
     }
 }
