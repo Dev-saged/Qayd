@@ -72,3 +72,51 @@ function icon(v, mono) {
   return `<svg viewBox="0 0 108 108" xmlns="http://www.w3.org/2000/svg">${defs(id)}${mono ? `<rect width="108" height="108" fill="${mono.bg}"/>` : v.bg(id)}${v.fg(id, mono && mono.fg)}</svg>`;
 }
 if (typeof module !== 'undefined') module.exports = { VARIANTS, icon };
+
+// تطويرات الكوفي
+const Q = `M54 36 H75 V75 H30 V54 H39 V66 H66 V57 H54 Z M62 43 V50 H68 V43 Z`;
+const dia = (x, f) => `<path d="M${x} 20.5 L${x + 5.5} 26 L${x} 31.5 L${x - 5.5} 26 Z" fill="${f}"/>`;
+const wrap = (s) => `<g transform="translate(54 57) scale(.92) translate(-54 -57)">${s}</g>`;
+const grid = (col, op) => { let s = ''; for (let i = 0; i <= 108; i += 9) s += `<path d="M${i} 0V108M0 ${i}H108" stroke="${col}" stroke-width=".35" opacity="${op}"/>`; return s; };
+
+const B1 = {
+  name: 'ب١ — الذهب على الحبر',
+  idea: 'الحرف ذهبي مصقول على حبر داكن، وشبكة الكوفي التي بُني عليها تظهر خفيفة في الخلفية كأنها مخطط المهندس.',
+  bg: (id) => `<rect width="108" height="108" fill="url(#bg${id})"/>${grid('#E4B24C', .10)}`,
+  fg: (id, m) => wrap(`
+    ${m ? '' : `<path fill-rule="evenodd" d="${Q}" fill="#000" opacity=".45" transform="translate(1.2 1.8)"/>`}
+    <path fill-rule="evenodd" d="${Q}" fill="${m || `url(#g${id})`}"/>
+    ${m ? '' : `<path d="M54 36 H75 V37.2 H55.2 V57 H54 Z" fill="#FFF3C8" opacity=".55"/>`}
+    ${dia(57, m || `url(#g${id})`)}${dia(70, m || C.ivory)}
+    <rect x="24" y="81" width="60" height="3" fill="${m || C.ivory}" opacity="${m ? 1 : .85}"/>`),
+};
+
+const B2 = {
+  name: 'ب٢ — صفحة الدفتر',
+  idea: 'الورق صار صفحة دفتر حقيقية: أسطر خفيفة وهامش ذهبي مزدوج على اليمين، والحرف بالحبر بعمق خفيف كأنه مطبوع.',
+  bg: (id) => {
+    let r = ''; for (let y = 18; y < 108; y += 9) r += `<path d="M0 ${y}H108" stroke="#C9B994" stroke-width=".45" opacity=".55"/>`;
+    return `<rect width="108" height="108" fill="url(#p${id})"/>${r}<path d="M88 0V108M90.2 0V108" stroke="${C.gold}" stroke-width=".7"/>`;
+  },
+  fg: (id, m) => wrap(`
+    ${m ? '' : `<path fill-rule="evenodd" d="${Q}" fill="#7A5A1E" opacity=".22" transform="translate(1 1.6)"/>`}
+    <path fill-rule="evenodd" d="${Q}" fill="${m || C.ink}"/>
+    ${dia(57, m || `url(#g${id})`)}${dia(70, m || C.ink)}
+    <rect x="24" y="81" width="60" height="4" fill="${m || `url(#g${id})`}"/>`),
+};
+
+const B3 = {
+  name: 'ب٣ — النقش',
+  idea: 'لوح ذهبي والحرف محفور فيه بعمق كنقش على بلاطة، مستوحى من الكوفي المعماري. النقطتان بالحبر والعاج.',
+  bg: (id) => `<rect width="108" height="108" fill="url(#g${id})"/><rect width="108" height="108" fill="url(#bg${id})" opacity=".0"/>
+    <radialGradient id="v${id}" cx=".5" cy=".45" r=".75"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#5A3A0C" stop-opacity=".35"/></radialGradient>
+    <rect width="108" height="108" fill="url(#v${id})"/>`,
+  fg: (id, m) => wrap(`
+    ${m ? '' : `<path fill-rule="evenodd" d="${Q}" fill="#FFF0C2" opacity=".7" transform="translate(.9 1.3)"/>`}
+    <path fill-rule="evenodd" d="${Q}" fill="${m || C.ink}"/>
+    ${m ? '' : `<path d="M54 36 H75 V38.4 H56.4 V57 H54 Z M30 54 H39 V56.4 H32.4 V75 H30 Z" fill="#000" opacity=".55"/>`}
+    ${dia(57, m || C.ink)}${dia(70, m || C.ivory)}
+    <rect x="24" y="81" width="60" height="3.4" fill="${m || C.ink}"/>`),
+};
+const VARIANTS2 = [B1, B2, B3];
+if (typeof module !== 'undefined') module.exports.VARIANTS2 = VARIANTS2;

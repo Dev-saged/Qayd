@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Readex+Pro:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  body{margin:0;background:#E9E6DF;font-family:'Readex Pro',sans-serif;color:#151823}
+  h1{font-size:30px;margin:0;padding:36px 40px 4px}
+  .sub{padding:0 40px 24px;color:#5b5f6b;font-size:16px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;padding:0 40px 40px}
+  .card{background:#fff;border-radius:28px;padding:24px;display:flex;flex-direction:column;gap:18px}
+  .card h2{margin:0;font-size:24px}
+  .card p{margin:0;color:#555a66;font-size:15px;line-height:1.6;min-height:48px}
+  .hero{width:100%;aspect-ratio:1;border-radius:22%;overflow:hidden;box-shadow:0 20px 40px -18px #0006}
+  .hero svg,.m svg{width:100%;height:100%;display:block}
+  .row{display:flex;gap:14px;align-items:flex-end;justify-content:space-between}
+  .lbl{font-size:12px;color:#777;text-align:center;margin-top:6px}
+  .m{overflow:hidden}
+  .wall{border-radius:22px;padding:18px 14px;display:flex;justify-content:space-around;align-items:center}
+  .wall .m{width:56px;height:56px;border-radius:50%}
+  .ph{width:56px;height:56px;border-radius:50%}
+</style></head><body>
+<h1>قيد — الكوفي — ثلاث تطويرات</h1>
+<div class="sub">كل تنويعة: القص المربع المنحني، الدائري، النسخة أحادية اللون (أندرويد 13+)، الأحجام الحقيقية 48 و24، وشكلها بين تطبيقات على خلفية داكنة وفاتحة.</div>
+<div class="grid" id="g"></div>
+<script src="icons.js"></script>
+<script>
+const ph = (c) => `<div class="ph" style="background:${c}"></div>`;
+const box = (html, s, r, l) => `<div><div class="m" style="width:${s}px;height:${s}px;border-radius:${r}">${html}</div>${l ? `<div class="lbl">${l}</div>` : ''}</div>`;
+document.getElementById('g').innerHTML = VARIANTS2.map(v => `
+<div class="card">
+  <h2>${v.name}</h2><p>${v.idea}</p>
+  <div class="hero">${icon(v)}</div>
+  <div class="row">
+    ${box(icon(v), 104, '50%', 'دائري')}
+    ${box(icon(v, { bg: '#DCE6D4', fg: '#2F4A2A' }), 104, '30%', 'أحادي فاتح')}
+    ${box(icon(v, { bg: '#26313F', fg: '#C9D8EE' }), 104, '30%', 'أحادي داكن')}
+  </div>
+  <div class="row" style="justify-content:flex-start;gap:26px">
+    ${box(icon(v), 48, '30%', '48')}
+    ${box(icon(v), 24, '30%', '24')}
+  </div>
+  <div class="wall" style="background:linear-gradient(135deg,#22324a,#3a2340)">
+    ${ph('#e6e9ef')}${ph('#3dbb6a')}${box(icon(v), 56, '50%')}${ph('#2e7cf6')}${ph('#f2f2f2')}
+  </div>
+  <div class="wall" style="background:linear-gradient(135deg,#f3e9d9,#dfe9f2)">
+    ${ph('#1f1f1f')}${ph('#ff5a4e')}${box(icon(v), 56, '50%')}${ph('#7d58f0')}${ph('#ffc93c')}
+  </div>
+</div>`).join('');
+</script></body></html>
