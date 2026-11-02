@@ -229,13 +229,7 @@ private fun QuickSale(l: Ledger, modifier: Modifier, onSale: () -> Unit, onTxTap
 private fun Header(shop: Shop, account: Account, sync: SyncState, modifier: Modifier) {
     val p = LocalPalette.current
     Row(modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(
-            Modifier
-                .size(44.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(Brush.linearGradient(listOf(p.pri, lerp(p.pri, Color.Black, .45f)))),
-            contentAlignment = Alignment.Center,
-        ) { T(shop.name.take(1), size = 18.sp, weight = FontWeight.Bold, color = p.onPri) }
+        dev.saged.qayd.ui.components.Avatar(account.avatar, account.displayName, 44.dp)
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
             T(shop.name, size = 16.sp, weight = FontWeight.SemiBold)
             T(ltr(account.email), size = 12.sp, color = p.mute)

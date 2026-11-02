@@ -44,7 +44,7 @@ service cloud.firestore {
     }
 
     match /presence/{shopId} {
-      allow read: if isSuper();
+      allow read, delete: if isSuper();
       allow write: if inShop(shopId)
         && request.resource.data.keys().hasOnly(['lastSeen', 'version', 'by', 'customers', 'members', 'smsUsed']);
     }
@@ -60,6 +60,11 @@ service cloud.firestore {
 
     match /shops/{shopId} {
       allow read: if isSuper() || inShop(shopId);
+
+      // مالك المنصة: تفريغ المحل واستعادة نسخه
+      match /{sub=**} {
+        allow read, write: if isSuper();
+      }
       allow create, delete: if isSuper();
       allow update: if isSuper() || (isOwner(shopId) && onlyChanges(['name', 'updatedAt']));
 
@@ -68,7 +73,8 @@ service cloud.firestore {
         allow create, delete: if isSuper();
         allow update: if isSuper()
           || (isOwner(shopId) && uid != request.auth.uid
-              && onlyChanges(['displayName', 'perms', 'active', 'updatedAt']));
+              && onlyChanges(['displayName', 'perms', 'active', 'updatedAt']))
+          || (inShop(shopId) && uid == request.auth.uid && onlyChanges(['avatar', 'updatedAt']));
       }
 
       match /customers/{id} {

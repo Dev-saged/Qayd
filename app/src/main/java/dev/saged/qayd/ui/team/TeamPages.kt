@@ -83,9 +83,7 @@ fun TeamPage(
                     .clickable(enabled = m.role != MemberRole.Owner, role = Role.Button) { editing = m }.padding(14.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(p.surface2), contentAlignment = Alignment.Center) {
-                        T(m.displayName.take(1), size = 16.sp, weight = FontWeight.SemiBold, color = p.pri)
-                    }
+                    dev.saged.qayd.ui.components.Avatar(m.avatar, m.displayName, 42.dp)
                     Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                         T(m.displayName, size = 15.sp, weight = FontWeight.Medium)
                         T("${if (m.role == MemberRole.Owner) "صاحب المحل" else if (m.active) "موظف" else "موقوف"} · ${ltr(m.username)}", size = 12.sp, color = if (m.active) p.mute else p.danger)
@@ -116,16 +114,21 @@ private fun Stat(label: String, value: String, modifier: Modifier) {
 private fun PermsSheet(m: Member, onSave: (Set<Perm>, Boolean) -> Unit, onDismiss: () -> Unit) {
     var perms by rememberSaveable(m.uid) { mutableStateOf(m.perms.map { it.key }.toSet()) }
     var active by rememberSaveable(m.uid) { mutableStateOf(m.active) }
-    QSheet("صلاحيات ${m.displayName}", onDismiss) {
-        QSwitchRow("الحساب فعّال", active, { active = it })
+    QSheet(
+        "صلاحيات ${m.displayName}", onDismiss,
+        footer = {
+            QButton("حفظ الصلاحيات", { onSave(Perm.entries.filter { it.key in perms }.toSet(), active); onDismiss() })
+        },
+    ) {
+        dev.saged.qayd.ui.components.QSwitchGroup(null, listOf(
+            dev.saged.qayd.ui.components.SwitchItem("الحساب فعّال", active, { active = it }, if (active) "يدخل ويعمل حسب صلاحياته" else "موقوف: لا يستطيع الدخول"),
+        ))
         Perm.entries.groupBy { it.group }.forEach { (group, list) ->
-            T(group, Modifier.padding(top = 14.dp, bottom = 4.dp), 13.sp, FontWeight.SemiBold, LocalPalette.current.pri)
-            list.forEach { pr ->
-                QSwitchRow(pr.label, pr.key in perms, { on -> perms = if (on) perms + pr.key else perms - pr.key })
-            }
+            Spacer(Modifier.height(12.dp))
+            dev.saged.qayd.ui.components.QSwitchGroup(group, list.map { pr ->
+                dev.saged.qayd.ui.components.SwitchItem(pr.label, pr.key in perms, { on -> perms = if (on) perms + pr.key else perms - pr.key })
+            })
         }
-        Spacer(Modifier.height(16.dp))
-        QButton("حفظ", { onSave(Perm.entries.filter { it.key in perms }.toSet(), active) })
     }
 }
 

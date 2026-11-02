@@ -31,6 +31,7 @@ data class Member(
     val role: Role,
     val perms: Set<Perm>,
     val active: Boolean,
+    val avatar: Int? = null,
 )
 
 /** ما يسمح به الحساب الحالي. صاحب المحل ومالك المنصة لهم كل شيء. */

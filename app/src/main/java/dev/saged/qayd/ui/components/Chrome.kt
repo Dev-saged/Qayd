@@ -90,7 +90,7 @@ fun ActionRow(icon: ImageVector, title: String, sub: String? = null, danger: Boo
 
 /** شيت سفلي بهوية قيد مع تمرير ورفع فوق لوحة المفاتيح. */
 @Composable
-fun QSheet(title: String, onDismiss: () -> Unit, content: @Composable () -> Unit) {
+fun QSheet(title: String, onDismiss: () -> Unit, footer: (@Composable () -> Unit)? = null, content: @Composable () -> Unit) {
     val p = LocalPalette.current
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -100,14 +100,18 @@ fun QSheet(title: String, onDismiss: () -> Unit, content: @Composable () -> Unit
             Box(Modifier.padding(top = 10.dp, bottom = 6.dp).size(width = 40.dp, height = 4.dp).clip(CircleShape).background(p.line))
         },
     ) {
-        Column(
-            Modifier.fillMaxWidth().imePadding().navigationBarsPadding().verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
-        ) {
-            T(title, Modifier.padding(vertical = 8.dp), 19.sp, FontWeight.SemiBold)
-            Spacer(Modifier.height(8.dp))
-            content()
-            Spacer(Modifier.height(24.dp))
+        Column(Modifier.fillMaxWidth().imePadding().navigationBarsPadding()) {
+            Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp)) {
+                T(title, Modifier.padding(vertical = 8.dp), 19.sp, FontWeight.SemiBold)
+                Spacer(Modifier.height(8.dp))
+                content()
+                Spacer(Modifier.height(if (footer == null) 24.dp else 12.dp))
+            }
+            // زر الحفظ ثابت أسفل اللوحة فوق خط فاصل
+            footer?.let {
+                Box(Modifier.fillMaxWidth().height(1.dp).background(p.line))
+                Box(Modifier.padding(horizontal = 20.dp, vertical = 14.dp)) { it() }
+            }
         }
     }
 }

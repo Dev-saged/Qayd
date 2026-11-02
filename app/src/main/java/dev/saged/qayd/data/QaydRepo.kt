@@ -232,6 +232,7 @@ class QaydRepo(context: Context) {
             d.id, d.getString("username").orEmpty(), d.getString("displayName").orEmpty(),
             if (d.getString("role") == "owner") Role.Owner else Role.Staff,
             Perm.entries.filter { perms[it.key] == true }.toSet(), d.getBoolean("active") ?: true,
+            d.getLong("avatar")?.toInt(),
         )
     }
 
@@ -481,7 +482,10 @@ class QaydRepo(context: Context) {
             JSONObject().put("username", username.trim().lowercase()).put("displayName", displayName.trim()).put("password", password),
         ).getString("email")
 
-    private suspend fun admin(path: String, body: JSONObject): JSONObject {
+    private suspend fun admin(path: String, body: JSONObject): JSONObject =
+        runCatching { JSONObject(adminRaw(path, body)) }.getOrElse { if (it is QaydError) throw it else JSONObject() }
+
+    private suspend fun adminRaw(path: String, body: JSONObject): String {
         val token = try {
             auth.currentUser?.getIdToken(false)?.await()?.token
         } catch (e: FirebaseNetworkException) {
@@ -499,9 +503,8 @@ class QaydRepo(context: Context) {
                 c.outputStream.use { it.write(body.toString().toByteArray()) }
                 val code = c.responseCode
                 val text = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() }.orEmpty()
-                val json = runCatching { JSONObject(text) }.getOrDefault(JSONObject())
-                if (code !in 200..299) throw QaydError(json.optString("message", "تعذر إتمام العملية"))
-                json
+                if (code !in 200..299) throw QaydError(runCatching { JSONObject(text) }.getOrDefault(JSONObject()).optString("message", "تعذر إتمام العملية"))
+                text
             } catch (e: IOException) {
                 throw QaydError("هذه العملية تحتاج اتصالاً بالإنترنت")
             } finally {
@@ -796,5 +799,77 @@ class QaydRepo(context: Context) {
 
     fun setBroadcast(text: String, active: Boolean) {
         db.document("config/broadcast").set(mapOf("text" to text.trim(), "active" to active, "at" to Timestamp(java.util.Date())))
+    }
+
+    fun setAvatar(shopId: String, uid: String, avatar: Int?) {
+        db.document("shops/$shopId/members/$uid").update(mapOf("avatar" to avatar, "updatedAt" to FieldValue.serverTimestamp()))
+    }
+
+    /* ---------- لوحة المالك: نسخ الخادم، التفريغ، الحذف ---------- */
+
+    data class ServerBackup(val key: String, val at: String, val size: Long, val reason: String)
+
+    private val wipeable = listOf(
+        "customers", "tx", "recurring", "readings", "templates", "ps", "audit", "products", "moves",
+        "suppliers", "stx", "menu", "orders", "holds", "usage", "smsQueue", "gateway",
+    )
+
+    suspend fun serverBackups(shopId: String): List<ServerBackup> {
+        val a = admin("/v1/backups/list", JSONObject().put("shopId", shopId)).optJSONArray("items") ?: return emptyList()
+        return (0 until a.length()).map { a.getJSONObject(it) }.map { ServerBackup(it.optString("key"), it.optString("at"), it.optLong("size"), it.optString("reason")) }
+    }
+
+    suspend fun runServerBackup(shopId: String) { admin("/v1/backups/run", JSONObject().put("shopId", shopId)) }
+
+    /** تفريغ بيانات المحل: يبقى المحل وحساباته وإعداداته. */
+    suspend fun wipeShop(shopId: String) {
+        for (c in wipeable) {
+            while (true) {
+                val docs = db.collection("shops/$shopId/$c").limit(400).get().await().documents
+                if (docs.isEmpty()) break
+                db.batch().apply { docs.forEach { delete(it.reference) } }.commit().await()
+                if (docs.size < 400) break
+            }
+        }
+        db.document("presence/$shopId").delete()
+    }
+
+    suspend fun deleteShop(shopId: String) {
+        wipeShop(shopId)
+        db.collection("shops/$shopId/settings").get().await().documents.forEach { it.reference.delete().await() }
+        admin("/v1/shops/remove", JSONObject().put("shopId", shopId))
+    }
+
+    /** استعادة نسخة خادم: تفريغ ثم كتابة الوثائق كما كانت. */
+    suspend fun restoreServerBackup(shopId: String, key: String) {
+        val root = JSONObject(adminRaw("/v1/backups/get", JSONObject().put("key", key)))
+        wipeShop(shopId)
+        val writes = mutableListOf<Pair<com.google.firebase.firestore.DocumentReference, Map<String, Any?>>>()
+        for (c in wipeable + listOf("settings", "members")) {
+            val pages = root.optJSONArray(c) ?: continue
+            for (i in 0 until pages.length()) {
+                val docs = pages.optJSONObject(i)?.optJSONArray("documents") ?: continue
+                for (j in 0 until docs.length()) {
+                    val d = docs.getJSONObject(j)
+                    val id = d.getString("name").substringAfterLast('/')
+                    val fields = d.optJSONObject("fields") ?: JSONObject()
+                    writes += db.document("shops/$shopId/$c/$id") to fields.keys().asSequence().associateWith { k -> rest(fields.getJSONObject(k)) }
+                }
+            }
+        }
+        writes.chunked(400).forEach { chunk -> db.batch().apply { chunk.forEach { (r, m) -> set(r, m) } }.commit().await() }
+        log(shopId, "استعادة نسخة", key.substringAfterLast(':'), null)
+    }
+
+    /** قيمة Firestore REST إلى قيمة SDK. */
+    private fun rest(v: JSONObject): Any? = when {
+        v.has("stringValue") -> v.getString("stringValue")
+        v.has("integerValue") -> v.getString("integerValue").toLong()
+        v.has("doubleValue") -> v.getDouble("doubleValue")
+        v.has("booleanValue") -> v.getBoolean("booleanValue")
+        v.has("timestampValue") -> Timestamp(java.util.Date.from(java.time.Instant.parse(v.getString("timestampValue"))))
+        v.has("mapValue") -> v.getJSONObject("mapValue").optJSONObject("fields")?.let { f -> f.keys().asSequence().associateWith { rest(f.getJSONObject(it)) } } ?: emptyMap<String, Any?>()
+        v.has("arrayValue") -> v.getJSONObject("arrayValue").optJSONArray("values")?.let { a -> (0 until a.length()).map { rest(a.getJSONObject(it)) } } ?: emptyList<Any?>()
+        else -> null
     }
 }

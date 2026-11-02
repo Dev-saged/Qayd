@@ -66,7 +66,9 @@ fun MoreScreen(
     onSignOut: () -> Unit,
     nav: MoreNav = MoreNav(null, null, null),
     autoBackup: Boolean? = null,
+    onAvatar: (Int?) -> Unit = {},
 ) {
+    var picking by rememberSaveable { mutableStateOf(false) }
     val p = LocalPalette.current
     var sheet by rememberSaveable { mutableStateOf<MoreSheet?>(null) }
     var paidFeature by rememberSaveable { mutableStateOf<String?>(null) }
@@ -84,10 +86,12 @@ fun MoreScreen(
                 .border(1.dp, p.line, shape).padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(
-                Modifier.size(52.dp).clip(RoundedCornerShape(16.dp)).background(Brush.linearGradient(listOf(p.pri, lerp(p.pri, Color.Black, .45f)))),
-                contentAlignment = Alignment.Center,
-            ) { T(account.displayName.take(1), size = 20.sp, weight = FontWeight.Bold, color = p.onPri) }
+            Box(Modifier.clickable(role = androidx.compose.ui.semantics.Role.Button) { picking = true }) {
+                dev.saged.qayd.ui.components.Avatar(account.avatar, account.displayName, 56.dp)
+                Box(Modifier.align(Alignment.BottomEnd).size(20.dp).clip(RoundedCornerShape(10.dp)).background(p.pri), contentAlignment = Alignment.Center) {
+                    dev.saged.qayd.ui.components.QIcon(QIcons.Edit, p.onPri, Modifier.size(12.dp))
+                }
+            }
             Column(Modifier.weight(1f).padding(horizontal = 14.dp)) {
                 T(account.displayName, size = 16.sp, weight = FontWeight.SemiBold)
                 T("${account.role.label} · ${shop.name}", size = 12.5.sp, color = p.mute, maxLines = 2)
@@ -129,6 +133,7 @@ fun MoreScreen(
         Spacer(Modifier.height(36.dp))
     }
 
+    if (picking) dev.saged.qayd.ui.components.AvatarPicker(account.avatar, account.displayName, onAvatar) { picking = false }
     paidFeature?.let { dev.saged.qayd.ui.components.PaidSheet(it) { paidFeature = null } }
     when (sheet) {
         MoreSheet.Rename -> RenameSheet(shop.name, onRename) { sheet = null }

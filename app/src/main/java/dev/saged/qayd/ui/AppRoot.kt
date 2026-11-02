@@ -50,6 +50,7 @@ import dev.saged.qayd.data.Template
 import dev.saged.qayd.system.AppLock
 import dev.saged.qayd.system.AutoBackup
 import dev.saged.qayd.system.Perms
+import dev.saged.qayd.system.SavedLogins
 import dev.saged.qayd.ui.perms.PermissionsScreen
 import dev.saged.qayd.system.Backup
 import dev.saged.qayd.data.Access
@@ -122,13 +123,31 @@ fun AppRoot(vm: AppViewModel = viewModel()) {
     }
 }
 
+/** بيانات دخول بانتظار التأكد من نجاحها قبل حفظها. */
+private var pending: Pair<String, String>? = null
+
 @Composable
 private fun AppContent(vm: AppViewModel, session: Session) {
+    val ctx = LocalContext.current
+    // تُحفظ بيانات "تذكّرني" بعد نجاح الدخول فقط
+    LaunchedEffect(session) { if (session is Session.Active) pending?.let { (u, pw) -> SavedLogins.save(ctx, u, pw); pending = null } }
     when (val s = session) {
         Session.Loading -> Splash()
         Session.SignedOut -> {
             val op by vm.login.collectAsStateWithLifecycle()
-            LoginScreen(op, vm::signIn)
+            val ctx = LocalContext.current
+            var saved by remember { mutableStateOf(SavedLogins.users(ctx)) }
+            val prefs = remember { ctx.getSharedPreferences("qayd_logins_opt", android.content.Context.MODE_PRIVATE) }
+            var rememberMe by remember { mutableStateOf(prefs.getBoolean("on", true)) }
+            LoginScreen(
+                op,
+                onSubmit = { u, pw -> pending = if (rememberMe) u.trim() to pw else null; vm.signIn(u, pw) },
+                saved = saved,
+                remember = rememberMe,
+                onRemember = { rememberMe = it; prefs.edit().putBoolean("on", it).apply() },
+                onQuick = { u -> SavedLogins.password(ctx, u)?.let { pw -> vm.signIn(u, pw) } ?: run { SavedLogins.remove(ctx, u); saved = SavedLogins.users(ctx) } },
+                onForget = { u -> SavedLogins.remove(ctx, u); saved = SavedLogins.users(ctx) },
+            )
         }
         is Session.Active -> when (s.account.role) {
             Role.SuperAdmin -> AdminRoot(vm, s.account)
@@ -180,6 +199,13 @@ private fun AdminRoot(vm: AppViewModel, account: Account) {
         },
         onBroadcast = vm.repo::setBroadcast,
         onSupport = { support = it },
+        server = dev.saged.qayd.ui.admin.ServerOps(
+            list = { vm.repo.serverBackups(it) },
+            run = { vm.repo.runServerBackup(it) },
+            restore = { id, key -> vm.repo.restoreServerBackup(id, key) },
+            wipe = { vm.repo.wipeShop(it) },
+            delete = { vm.repo.deleteShop(it) },
+        ),
     )
 }
 
@@ -291,6 +317,8 @@ private fun ShopRoot(vm: AppViewModel, account: Account, onExit: (() -> Unit)? =
                 }
             }
             val me = members.firstOrNull { it.uid == account.uid }
+            @Suppress("NAME_SHADOWING")
+            val account = account.copy(avatar = me?.avatar)
             val access = when {
                 account.role == Role.Owner -> Access.Full
                 support -> Access(Role.Staff, setOf(dev.saged.qayd.data.Perm.ViewBalances, dev.saged.qayd.data.Perm.ViewReports, dev.saged.qayd.data.Perm.ExportPdf))
@@ -318,6 +346,7 @@ private fun ShopRoot(vm: AppViewModel, account: Account, onExit: (() -> Unit)? =
                     onSignOut = exit,
                     nav = nav,
                     autoBackup = if (account.role == Role.Owner) shop.unlocked("autoBackup", features) else null,
+                    onAvatar = { a -> if (!support) vm.repo.setAvatar(shop.id, account.uid, a) },
                 )
             }
         }

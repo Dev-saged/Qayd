@@ -35,6 +35,7 @@ data class Account(
     val displayName: String,
     val role: Role,
     val shopId: String?,
+    val avatar: Int? = null,
 )
 
 @Immutable

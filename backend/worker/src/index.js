@@ -229,7 +229,116 @@ async function createStaff(env, caller, body) {
   return { uid, email };
 }
 
+/* ---------- النسخ الاحتياطية على الخادم وتنظيف القاعدة ---------- */
+const DATA = ['customers', 'tx', 'recurring', 'readings', 'templates', 'settings', 'ps', 'audit', 'products', 'moves',
+  'suppliers', 'stx', 'menu', 'orders', 'holds', 'usage', 'members'];
+const KEEP_DAYS = 7;
+
+async function rawGet(env, url) {
+  const token = await accessToken(env.sa);
+  const r = await fetch(url, { headers: { authorization: `Bearer ${token}` } });
+  if (!r.ok) throw new Fail(502, 'google', `خطأ من Firebase: ${r.status}`);
+  return r.text();
+}
+
+/** نسخة كاملة لمحل: نصوص Firestore كما هي دون تحليلها، فتبقى خفيفة على المعالج. */
+async function backupShop(env, shopId, reason) {
+  const parts = [`"shop":${await rawGet(env, fsUrl(env, `/shops/${shopId}`))}`];
+  for (const c of DATA) {
+    const pages = [];
+    let token = '';
+    do {
+      const t = await rawGet(env, fsUrl(env, `/shops/${shopId}/${c}?pageSize=1000${token ? `&pageToken=${token}` : ''}`));
+      pages.push(t);
+      token = t.includes('"nextPageToken"') ? JSON.parse(t).nextPageToken : '';
+    } while (token && pages.length < 20);
+    parts.push(`"${c}":[${pages.join(',')}]`);
+  }
+  const at = new Date().toISOString();
+  const body = `{"app":"qayd","format":"firestore-rest","shopId":"${shopId}","at":"${at}",${parts.join(',')}}`;
+  const key = `bk:${shopId}:${at}`;
+  await env.QAYD_APP.put(key, body, { expirationTtl: KEEP_DAYS * 86400, metadata: { at, size: body.length, reason } });
+  return { key, at, size: body.length };
+}
+
+async function listShops(env) {
+  const d = await google(env, fsUrl(env, '/shops?pageSize=300&mask.fieldPaths=name'));
+  return (d.documents || []).map((x) => x.name.split('/').pop());
+}
+
+/** حذف الرسائل المنتهية بعد 30 يوماً، والسجلات المحذوفة حذفاً ناعماً بعد 60 يوماً. */
+async function cleanShop(env, shopId) {
+  const now = Date.now();
+  const parent = `${docsBase(env)}/shops/${shopId}`;
+  const query = (collectionId, field, values) => google(env, `https://firestore.googleapis.com/v1/${parent}:runQuery`, 'POST', {
+    structuredQuery: {
+      from: [{ collectionId }],
+      where: values.length === 1
+        ? { fieldFilter: { field: { fieldPath: field }, op: 'EQUAL', value: values[0] } }
+        : { fieldFilter: { field: { fieldPath: field }, op: 'IN', value: { arrayValue: { values } } } },
+      limit: 400,
+    },
+  });
+  const old = (r, days, f = 'updatedAt') => (r || []).filter((x) => x.document)
+    .filter((x) => { const t = x.document.fields?.[f]?.timestampValue || x.document.updateTime; return now - Date.parse(t) > days * 86400000; })
+    .map((x) => ({ delete: x.document.name }));
+  const writes = [
+    ...old(await query('smsQueue', 'status', [{ stringValue: 'sent' }, { stringValue: 'delivered' }, { stringValue: 'failed' }]), 30, 'at'),
+  ];
+  for (const c of ['tx', 'customers', 'products', 'menu', 'suppliers', 'stx', 'templates', 'recurring', 'holds']) {
+    writes.push(...old(await query(c, 'deleted', [{ booleanValue: true }]), 60));
+  }
+  for (let i = 0; i < writes.length; i += 450) await commit(env, writes.slice(i, i + 450));
+  return writes.length;
+}
+
+/** كل 10 دقائق: نسخة لمحل واحد لم يُنسخ في هذه الفترة (3 فترات يومياً)، ثم تنظيفه مرة يومياً. */
+async function scheduled(env) {
+  if (!env.sa) env.sa = JSON.parse(env.FIREBASE_SA);
+  const d = new Date();
+  const slot = `${d.toISOString().slice(0, 10)}-${Math.floor(d.getUTCHours() / 8)}`;
+  const day = d.toISOString().slice(0, 10);
+  const st = (await env.QAYD_APP.get('bk:state', 'json')) || {};
+  if (st.slot !== slot) { st.slot = slot; st.done = []; }
+  if (st.day !== day) { st.day = day; st.cleaned = []; }
+  const shops = await listShops(env);
+  const next = shops.find((id) => !st.done.includes(id));
+  if (next) {
+    await backupShop(env, next, 'schedule');
+    st.done.push(next);
+  } else {
+    const dirty = shops.find((id) => !st.cleaned.includes(id));
+    if (dirty) { await cleanShop(env, dirty); st.cleaned.push(dirty); }
+  }
+  await env.QAYD_APP.put('bk:state', JSON.stringify(st));
+}
+
+async function listBackups(env, shopId) {
+  const r = await env.QAYD_APP.list({ prefix: `bk:${shopId}:` });
+  return r.keys.map((k) => ({ key: k.name, at: k.metadata?.at, size: k.metadata?.size, reason: k.metadata?.reason, expires: k.expiration }))
+    .sort((a, b) => (a.at < b.at ? 1 : -1));
+}
+
+/** حذف المحل نهائياً بعد أن يفرّغ التطبيق بياناته: الحسابات، الأعضاء، النطاق، والمحل. */
+async function removeShop(env, shopId) {
+  const shop = await getDoc(env, `shops/${shopId}`);
+  if (!shop) throw new Fail(404, 'no_shop', 'المحل غير موجود');
+  const members = await google(env, fsUrl(env, `/shops/${shopId}/members?pageSize=300`));
+  for (const m of members.documents || []) await deleteUser(env, m.name.split('/').pop());
+  const writes = (members.documents || []).map((m) => ({ delete: m.name }));
+  writes.push({ delete: `${docsBase(env)}/suffixes/${shop.suffix}` }, { delete: `${docsBase(env)}/presence/${shopId}` }, { delete: `${docsBase(env)}/shops/${shopId}` });
+  await commit(env, writes);
+  return { removed: shopId };
+}
+
+function requireSuper(caller) {
+  if (caller.super_admin !== true) throw new Fail(403, 'forbidden', 'هذه العملية لمالك المنصة فقط');
+}
+
 export default {
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(scheduled(env).catch(() => {}));
+  },
   async fetch(request, env) {
     const { pathname } = new URL(request.url);
     try {
@@ -251,6 +360,17 @@ export default {
       const body = await request.json().catch(() => ({}));
       if (pathname === '/v1/shops') return json(200, await createShop(env, caller, body));
       if (pathname === '/v1/staff') return json(200, await createStaff(env, caller, body));
+      if (pathname === '/v1/backups/list') { requireSuper(caller); return json(200, { items: await listBackups(env, clean(body.shopId, 40)) }); }
+      if (pathname === '/v1/backups/get') {
+        requireSuper(caller);
+        const key = clean(body.key, 120);
+        if (!key.startsWith('bk:')) throw new Fail(400, 'bad_key', 'نسخة غير صالحة');
+        const data = await env.QAYD_APP.get(key);
+        if (!data) throw new Fail(404, 'not_found', 'النسخة غير موجودة أو انتهت مدتها');
+        return new Response(data, { headers: { 'content-type': 'application/json; charset=utf-8' } });
+      }
+      if (pathname === '/v1/backups/run') { requireSuper(caller); return json(200, await backupShop(env, clean(body.shopId, 40), 'manual')); }
+      if (pathname === '/v1/shops/remove') { requireSuper(caller); return json(200, await removeShop(env, clean(body.shopId, 40))); }
       throw new Fail(404, 'not_found', 'غير موجود');
     } catch (e) {
       if (e instanceof Fail) return json(e.status, { error: e.code, message: e.message });

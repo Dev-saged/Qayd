@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -205,5 +206,43 @@ fun QNotice(text: String, error: Boolean, modifier: Modifier = Modifier) {
         Box(Modifier.size(8.dp).clip(CircleShape).background(c))
         Spacer(Modifier.width(10.dp))
         T(text, size = 13.5.sp, color = c, maxLines = 4)
+    }
+}
+
+/** صف مفتاح داخل مجموعة. */
+data class SwitchItem(val label: String, val checked: Boolean, val onChange: (Boolean) -> Unit, val sub: String? = null)
+
+/** مجموعة مفاتيح في بطاقة واحدة بفواصل رفيعة بين الصفوف وعنوان واضح. */
+@Composable
+fun QSwitchGroup(title: String?, rows: List<SwitchItem>, modifier: Modifier = Modifier) {
+    val p = LocalPalette.current
+    Column(modifier.fillMaxWidth().padding(top = 6.dp)) {
+        if (title != null) Row(Modifier.padding(start = 4.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(width = 3.dp, height = 14.dp).clip(RoundedCornerShape(2.dp)).background(p.pri))
+            T(title, Modifier.padding(start = 8.dp), 13.5.sp, FontWeight.SemiBold, p.pri)
+            T("${rows.count { it.checked }}/${rows.size}", Modifier.padding(start = 8.dp), 12.sp, color = p.mute)
+        }
+        val shape = RoundedCornerShape(18.dp)
+        Column(Modifier.fillMaxWidth().clip(shape).background(p.surface2.copy(alpha = .55f)).border(1.dp, p.line, shape)) {
+            rows.forEachIndexed { i, r ->
+                if (i > 0) Box(Modifier.padding(horizontal = 14.dp).fillMaxWidth().height(1.dp).background(p.line))
+                Row(
+                    Modifier.fillMaxWidth().heightIn(min = 54.dp).clickable(role = Role.Switch) { r.onChange(!r.checked) }.padding(horizontal = 14.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        T(r.label, size = 14.5.sp, weight = if (r.checked) FontWeight.Medium else FontWeight.Normal)
+                        r.sub?.let { T(it, Modifier.padding(top = 2.dp), 11.5.sp, color = p.mute, maxLines = 2) }
+                    }
+                    Switch(
+                        checked = r.checked, onCheckedChange = null,
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = p.onPri, checkedTrackColor = p.pri,
+                            uncheckedThumbColor = p.mute, uncheckedTrackColor = p.surface, uncheckedBorderColor = p.line,
+                        ),
+                    )
+                }
+            }
+        }
     }
 }

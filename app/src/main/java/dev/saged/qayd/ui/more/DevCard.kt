@@ -106,3 +106,32 @@ private fun Flag(modifier: Modifier) = Canvas(modifier) {
     drawRect(Color(0xFF149954), Offset(0f, 2 * h), Size(size.width, h))
     drawPath(Path().apply { moveTo(0f, 0f); lineTo(size.width * .42f, size.height / 2); lineTo(0f, size.height); close() }, Color(0xFFE4312B))
 }
+
+/** سطر المطور الصغير أسفل شاشة الدخول. */
+@Composable
+fun DevFooter(modifier: Modifier = Modifier) {
+    val p = LocalPalette.current
+    val ctx = LocalContext.current
+    val d = BrandConfig.Dev
+    Column(modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(28.dp).height(1.dp).background(p.line))
+            T("تصميم وتطوير ${d.TITLE}", Modifier.padding(horizontal = 10.dp), 11.5.sp, FontWeight.Medium, p.mute)
+            Box(Modifier.width(28.dp).height(1.dp).background(p.line))
+        }
+        Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.Center) {
+            d.LINKS.forEach { (k, url) ->
+                Box(
+                    Modifier.size(44.dp).clip(CircleShape).clickable(role = Role.Button, onClickLabel = LABELS[k]) {
+                        runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                    },
+                    contentAlignment = Alignment.Center,
+                ) { QIcon(iconOf(k), p.mute, Modifier.size(17.dp), LABELS[k]) }
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Flag(Modifier.size(width = 16.dp, height = 10.dp).clip(RoundedCornerShape(2.dp)))
+            T("${d.PLACE} · ⁦v${BuildConfig.VERSION_NAME.substringBefore('-')}⁩", Modifier.padding(start = 6.dp), 10.5.sp, color = p.mute)
+        }
+    }
+}

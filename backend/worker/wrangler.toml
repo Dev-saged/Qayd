@@ -12,3 +12,7 @@ PROJECT_ID = "qayd-ps"
 [[kv_namespaces]]
 binding = "QAYD_APP"
 id = "6a9875057fbd4b10823a1f22e8ea02e7"
+
+# نسخ احتياطية للمحلات (3 فترات يومياً) وتنظيف القاعدة
+[triggers]
+crons = ["*/10 * * * *"]

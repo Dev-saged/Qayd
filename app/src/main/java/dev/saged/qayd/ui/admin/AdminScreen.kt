@@ -25,6 +25,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -86,6 +87,7 @@ fun AdminScreen(
     onPayment: (Shop, Double, Int, String, String) -> Unit = { _, _, _, _, _ -> },
     onBroadcast: (String, Boolean) -> Unit = { _, _ -> },
     onSupport: (Shop) -> Unit = {},
+    server: ServerOps = ServerOps(),
 ) {
     val p = LocalPalette.current
     var creating by rememberSaveable { mutableStateOf(false) }
@@ -193,6 +195,7 @@ fun AdminScreen(
             onApplyPlan = { pl, until -> onApplyPlan(s, pl, until); editing = null },
             onPayment = { a, months, note -> onPayment(s, a, months, s.plan, note); editing = null },
             onSupport = { onSupport(s); editing = null },
+            server = server,
         ) { editing = null }
     }
     if (plansOpen) PlansSheet(plans, onSavePlans) { plansOpen = false }
@@ -200,7 +203,9 @@ fun AdminScreen(
     if (featuresOpen) {
         QSheet("المميزات: مجانية أم مدفوعة", { featuresOpen = false }) {
             T("الميزة المدفوعة تُقفل عند كل محل لم تفعّلها له، ويظهر له زر التواصل معك.", size = 12.5.sp, color = p.mute, maxLines = 2)
-            FEATURES.forEach { (k, label) -> QSwitchRow("$label — ${if (features[k] == "paid") "مدفوعة" else "مجانية"}", features[k] == "paid", { onFeature(k, it) }) }
+            dev.saged.qayd.ui.components.QSwitchGroup("مدفوعة", FEATURES.map { (k, label) ->
+                dev.saged.qayd.ui.components.SwitchItem(label, features[k] == "paid", { onFeature(k, it) }, if (features[k] == "paid") "مقفلة إلا للمحلات المفعّلة لها" else "مجانية لكل المحلات")
+            })
         }
     }
 }
@@ -215,9 +220,12 @@ private fun EditShopSheet(
     onApplyPlan: (dev.saged.qayd.data.Plan, Long?) -> Unit = { _, _ -> },
     onPayment: (Double, Int, String) -> Unit = { _, _, _ -> },
     onSupport: () -> Unit = {},
+    server: ServerOps = ServerOps(),
     onDismiss: () -> Unit,
 ) {
     var paying by remember { mutableStateOf(false) }
+    var backupsOpen by remember { mutableStateOf(false) }
+    var danger by remember { mutableStateOf<String?>(null) }
     val p = LocalPalette.current
     var name by rememberSaveable(s.id) { mutableStateOf(s.name) }
     var mods by rememberSaveable(s.id) { mutableStateOf(s.modules.map { it.key }.toSet()) }
@@ -234,7 +242,9 @@ private fun EditShopSheet(
             T("نوع النشاط", Modifier.padding(top = 6.dp), 14.sp, FontWeight.SemiBold)
             BizPicker(type) { t -> type = t.key }
             T("الوحدات", Modifier.padding(top = 6.dp), 14.sp, FontWeight.SemiBold)
-            Module.entries.forEach { m -> QSwitchRow(m.label, m.key in mods, { on -> mods = if (on) mods + m.key else mods - m.key }) }
+            dev.saged.qayd.ui.components.QSwitchGroup(null, Module.entries.map { m ->
+                dev.saged.qayd.ui.components.SwitchItem(m.label, m.key in mods, { on -> mods = if (on) mods + m.key else mods - m.key })
+            })
             if (Module.Ps.key in mods) QStepper("عدد الشاشات", screens, 1..12) { screens = it }
             if (Module.Sms.key in mods) {
                 T("حد الرسائل الشهري", Modifier.padding(top = 6.dp), 14.sp, FontWeight.SemiBold)
@@ -248,7 +258,9 @@ private fun EditShopSheet(
             val paidFeatures = FEATURES.filter { features[it.first] == "paid" }
             if (paidFeatures.isNotEmpty()) {
                 T("المميزات المدفوعة المفعّلة لهذا المحل", Modifier.padding(top = 6.dp), 14.sp, FontWeight.SemiBold)
-                paidFeatures.forEach { (k, label) -> QSwitchRow(label, k in paid, { on -> paid = if (on) paid + k else paid - k }) }
+                dev.saged.qayd.ui.components.QSwitchGroup(null, paidFeatures.map { (k, label) ->
+                    dev.saged.qayd.ui.components.SwitchItem(label, k in paid, { on -> paid = if (on) paid + k else paid - k })
+                })
             }
             T("الاشتراك", Modifier.padding(top = 6.dp), 14.sp, FontWeight.SemiBold)
             T(
@@ -281,6 +293,21 @@ private fun EditShopSheet(
             }
             QButton("تسجيل دفعة وتمديد الاشتراك", { paying = true }, secondary = true)
             QButton("عرض المحل للدعم (قراءة فقط)", onSupport, secondary = true)
+            QButton("النسخ الاحتياطية على الخادم", { backupsOpen = true }, secondary = true)
+            Column(
+                Modifier.padding(top = 8.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.danger.copy(alpha = .08f))
+                    .border(1.dp, p.danger.copy(alpha = .35f), RoundedCornerShape(18.dp)).padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                T("منطقة الخطر", size = 14.sp, weight = FontWeight.SemiBold, color = p.danger)
+                T("التفريغ يحذف الزبائن والحركات وكل البيانات ويُبقي المحل وحساباته. الحذف يزيل المحل وحساباته نهائياً.", size = 12.sp, color = p.mute, maxLines = 3)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    QButton("تفريغ البيانات", { danger = "wipe" }, Modifier.weight(1f), secondary = true)
+                    QButton("حذف المحل", { danger = "delete" }, Modifier.weight(1f), secondary = true)
+                }
+            }
+            if (backupsOpen) BackupsSheet(s, server) { backupsOpen = false }
+            danger?.let { kind -> DangerSheet(s, kind, server, onDone = { danger = null; onDismiss() }) { danger = null } }
             Spacer(Modifier.height(6.dp))
             if (paying) PaymentSheet(onPayment) { paying = false }
             QButton("حفظ", {
@@ -513,6 +540,101 @@ private fun BroadcastSheet(b: dev.saged.qayd.data.Broadcast?, onSave: (String, B
             QField(text, { text = it }, "نص الرسالة", hint = "تحديث جديد متاح، أو عرض خاص هذا الشهر…", lines = 4)
             QButton("نشر لكل المحلات", { if (text.isNotBlank()) { onSave(text, true); onDismiss() } })
             if (b?.active == true) QButton("إيقاف الرسالة الحالية", { onSave(b.text, false); onDismiss() }, secondary = true)
+        }
+    }
+}
+
+/** عمليات الخادم من لوحة المالك. */
+class ServerOps(
+    val list: suspend (String) -> List<dev.saged.qayd.data.QaydRepo.ServerBackup> = { emptyList() },
+    val run: suspend (String) -> Unit = {},
+    val restore: suspend (String, String) -> Unit = { _, _ -> },
+    val wipe: suspend (String) -> Unit = {},
+    val delete: suspend (String) -> Unit = {},
+)
+
+@Composable
+private fun BackupsSheet(s: Shop, server: ServerOps, onDismiss: () -> Unit) {
+    val p = LocalPalette.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var items by remember { mutableStateOf<List<dev.saged.qayd.data.QaydRepo.ServerBackup>?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+    var confirm by remember { mutableStateOf<dev.saged.qayd.data.QaydRepo.ServerBackup?>(null) }
+    fun load() = scope.launch { items = runCatching { server.list(s.id) }.getOrElse { msg = (it.message ?: "تعذر التحميل") to true; emptyList() } }
+    androidx.compose.runtime.LaunchedEffect(s.id) { load() }
+    QSheet("نسخ ${s.name} على الخادم", onDismiss) {
+        T("تُؤخذ تلقائياً 3 مرات يومياً، وتُحذف بعد 7 أيام. تُنظَّف القاعدة يومياً من الرسائل المنتهية والسجلات المحذوفة القديمة.", size = 12.5.sp, color = p.mute, maxLines = 3)
+        Spacer(Modifier.height(12.dp))
+        msg?.let { (t, e) -> QNotice(t, error = e); Spacer(Modifier.height(10.dp)) }
+        QButton("نسخة الآن", {
+            busy = true
+            scope.launch { msg = runCatching { server.run(s.id) }.fold({ "تم أخذ نسخة" to false }, { (it.message ?: "تعذر") to true }); busy = false; load() }
+        }, busy = busy, busyText = "جارٍ النسخ…")
+        Spacer(Modifier.height(12.dp))
+        val list = items
+        if (list == null) T("جارٍ التحميل…", size = 13.sp, color = p.mute)
+        else if (list.isEmpty()) T("لا نسخ بعد. أول نسخة تلقائية خلال ساعات.", size = 13.sp, color = p.mute)
+        else {
+            val shape = RoundedCornerShape(18.dp)
+            Column(Modifier.fillMaxWidth().clip(shape).background(p.surface2.copy(alpha = .55f)).border(1.dp, p.line, shape)) {
+                list.forEachIndexed { i, b ->
+                    if (i > 0) Box(Modifier.padding(horizontal = 14.dp).fillMaxWidth().height(1.dp).background(p.line))
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            val t = runCatching { java.time.Instant.parse(b.at).toEpochMilli() }.getOrDefault(0L)
+                            T("${dev.saged.qayd.ui.util.dayLabel(t)} ${dev.saged.qayd.ui.util.clock(t)}", size = 14.sp, weight = FontWeight.Medium)
+                            T("${if (b.reason == "manual") "يدوية" else "تلقائية"} · ⁦${b.size / 1024} KB⁩", size = 11.5.sp, color = p.mute)
+                        }
+                        T("استعادة", Modifier.clip(RoundedCornerShape(10.dp)).clickable(role = Role.Button) { confirm = b }.padding(8.dp), 13.sp, FontWeight.SemiBold, p.pri)
+                    }
+                }
+            }
+        }
+    }
+    confirm?.let { b ->
+        QSheet("استعادة النسخة؟", { if (!busy) confirm = null }) {
+            T("تُستبدل كل بيانات ${s.name} الحالية بهذه النسخة. لا يمكن التراجع.", size = 13.5.sp, color = p.mute, maxLines = 3)
+            Spacer(Modifier.height(14.dp))
+            QButton("استعادة", {
+                busy = true
+                scope.launch {
+                    msg = runCatching { server.restore(s.id, b.key) }.fold({ "تمت الاستعادة" to false }, { (it.message ?: "تعذر") to true })
+                    busy = false; confirm = null
+                }
+            }, busy = busy, busyText = "جارٍ الاستعادة…")
+        }
+    }
+}
+
+@Composable
+private fun DangerSheet(s: Shop, kind: String, server: ServerOps, onDone: () -> Unit, onDismiss: () -> Unit) {
+    val p = LocalPalette.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var typed by rememberSaveable { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var err by remember { mutableStateOf<String?>(null) }
+    val wipe = kind == "wipe"
+    QSheet(if (wipe) "تفريغ بيانات ${s.name}" else "حذف ${s.name} نهائياً", { if (!busy) onDismiss() }) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            T(
+                if (wipe) "تُحذف كل الزبائن والحركات والأصناف والطلبات والرسائل. يبقى المحل وحساباته. تُؤخذ نسخة على الخادم أولاً."
+                else "يُحذف المحل وكل بياناته وحسابات دخوله ونطاقه نهائياً. تُؤخذ نسخة على الخادم أولاً وتبقى 7 أيام.",
+                size = 13.5.sp, color = p.mute, maxLines = 4,
+            )
+            QField(typed, { typed = it.trim() }, "اكتب نطاق المحل للتأكيد", hint = s.suffix, ltr = true)
+            err?.let { QNotice(it, error = true) }
+            QButton(if (wipe) "تفريغ البيانات" else "حذف نهائي", {
+                if (typed != s.suffix) { err = "النطاق غير مطابق"; return@QButton }
+                busy = true
+                scope.launch {
+                    runCatching {
+                        server.run(s.id)
+                        if (wipe) server.wipe(s.id) else server.delete(s.id)
+                    }.onSuccess { onDone() }.onFailure { err = it.message ?: "تعذر إتمام العملية" }
+                    busy = false
+                }
+            }, busy = busy, busyText = if (wipe) "جارٍ التفريغ…" else "جارٍ الحذف…")
         }
     }
 }
