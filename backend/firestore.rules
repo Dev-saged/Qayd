@@ -7,7 +7,10 @@ service cloud.firestore {
 
     function signedIn() { return request.auth != null; }
     function isSuper() { return signedIn() && request.auth.token.get('super_admin', false) == true; }
-    function inShop(shopId) { return signedIn() && request.auth.token.get('shopId', '') == shopId; }
+    // صاحب عدة محلات: محله الأساسي في shopId وباقي محلاته في shops
+    function inShop(shopId) {
+      return signedIn() && (request.auth.token.get('shopId', '') == shopId || shopId in request.auth.token.get('shops', []));
+    }
     function isOwner(shopId) { return inShop(shopId) && request.auth.token.get('role', '') == 'owner'; }
     function shop(shopId) { return get(/databases/$(db)/documents/shops/$(shopId)).data; }
     function shopActive(shopId) {
@@ -55,7 +58,7 @@ service cloud.firestore {
 
     // رموز روابط الكشف: يقرؤها الـ Worker فقط
     match /links/{token} {
-      allow create: if signedIn() && request.resource.data.shopId == request.auth.token.get('shopId', '')
+      allow create: if inShop(request.resource.data.shopId)
         && request.resource.data.keys().hasOnly(['shopId', 'customerId', 'createdAt']);
     }
 

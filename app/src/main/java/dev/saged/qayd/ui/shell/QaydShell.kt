@@ -47,6 +47,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -180,6 +181,8 @@ fun QaydShell(
     gatewayRequest: dev.saged.qayd.data.GatewayRequest? = null,
     wallets: List<String> = emptyList(),
     closes: List<dev.saged.qayd.data.CashClose> = emptyList(),
+    shopNames: Map<String, String> = emptyMap(),
+    onSwitchShop: (String) -> Unit = {},
     more: @Composable (PaddingValues, MoreNav) -> Unit,
 ) = androidx.compose.runtime.CompositionLocalProvider(
     dev.saged.qayd.ui.components.LocalQuickAdds provides dev.saged.qayd.data.BizType.of(shop.type).quickAdds,
@@ -203,6 +206,7 @@ fun QaydShell(
     var pricesOpen by rememberSaveable { mutableStateOf(false) }
     var smsFor by remember { mutableStateOf<String?>(null) }
     var recording by remember { mutableStateOf(false) }
+    var switching by remember { mutableStateOf(false) }
     val voiceOk = access.can(Perm.AddDebt) || access.can(Perm.AddPayment) || access.can(Perm.QuickSale)
     val launch = dev.saged.qayd.system.QaydWidget.launch.value
     androidx.compose.runtime.LaunchedEffect(launch) {
@@ -304,6 +308,7 @@ fun QaydShell(
                             },
                             onOrders = { page = Page.Orders },
                             notice = notice, onNoticeClose = onNoticeClose,
+                            onSwitchShop = { switching = true }.takeIf { account.shopIds.size > 1 },
                             locked = locked,
                         )
                         Tab.Customers -> CustomersScreen(
@@ -442,6 +447,26 @@ fun QaydShell(
             initial = AmountInput.of(r.current), onDismiss = { pad = null },
         ) { v, _ -> actions.setPrice(r.key, v) }
         null -> Unit
+    }
+
+    if (switching) dev.saged.qayd.ui.components.QSheet("محلاتك", { switching = false }) {
+        val shape = androidx.compose.foundation.shape.RoundedCornerShape(18.dp)
+        Column(Modifier.fillMaxWidth().clip(shape).background(p.surface2.copy(alpha = .55f)).border(1.dp, p.line, shape)) {
+            account.shopIds.forEachIndexed { i, id ->
+                if (i > 0) Box(Modifier.padding(horizontal = 14.dp).fillMaxWidth().height(1.dp).background(p.line))
+                val on = id == shop.id
+                Row(
+                    Modifier.fillMaxWidth().clickable(role = androidx.compose.ui.semantics.Role.RadioButton) { switching = false; if (!on) onSwitchShop(id) }
+                        .padding(horizontal = 14.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    QIcon(QIcons.Shop, if (on) p.pri else p.mute, Modifier.size(22.dp))
+                    T(shopNames[id] ?: "…", Modifier.weight(1f).padding(horizontal = 12.dp), 15.sp, if (on) FontWeight.SemiBold else FontWeight.Normal)
+                    if (on) QIcon(QIcons.Check, p.pri, Modifier.size(20.dp))
+                }
+            }
+        }
+        T("لكل محل زبائنه وحركاته وقوالب رسائله منفصلة.", Modifier.padding(top = 10.dp), 12.sp, color = p.mute)
     }
 
     if (recording) dev.saged.qayd.ui.voice.VoiceRecordSheet(shop.id) { recording = false }

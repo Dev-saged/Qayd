@@ -205,6 +205,7 @@ private fun AdminRoot(vm: AppViewModel, account: Account) {
             restore = { id, key -> vm.repo.restoreServerBackup(id, key) },
             wipe = { vm.repo.wipeShop(it) },
             delete = { vm.repo.deleteShop(it) },
+            link = { id, login, unlink -> vm.repo.linkOwner(id, login, unlink) },
         ),
     )
 }
@@ -259,6 +260,7 @@ private fun ShopRoot(vm: AppViewModel, account: Account, onExit: (() -> Unit)? =
                 if (!support) dev.saged.qayd.system.QaydWidget.update(ctx, shop.name, ledger.todaySales, ledger.totalDebt)
             }
             LaunchedEffect(Unit) { dev.saged.qayd.voice.VoiceInbox.load(ctx) }
+            val shopNames by remember(account.shopIds) { vm.repo.shopNames(account.shopIds) }.collectAsStateWithLifecycle(emptyMap())
             val wallets by remember(shop.id) { vm.repo.wallets(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val closes by remember(shop.id) { vm.repo.closes(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val products by remember(shop.id) { vm.repo.products(shop.id) }.collectAsStateWithLifecycle(emptyList())
@@ -352,6 +354,7 @@ private fun ShopRoot(vm: AppViewModel, account: Account, onExit: (() -> Unit)? =
             if (!access.active) return Blocked("حسابك موقوف من صاحب المحل", exit)
             QaydShell(shop, account, current.second, ledger, slots, actions, access, members, audit, prices, power, gateway, queue, templates, features, smsUsed, stock, suppliers, stockActions, menu, orders, orderActions, holds, holdActions,
                 smsSettings = smsSettings, gatewayRequest = gatewayRequest, wallets = wallets, closes = closes,
+                shopNames = shopNames, onSwitchShop = { vm.repo.switchShop(it) },
                 notice = notice?.text, onNoticeClose = { notice?.let { prefs.edit().putLong("seen", it.at).apply(); seenNotice = it.at } },
             ) { pad, nav ->
                 MoreScreen(

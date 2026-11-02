@@ -109,17 +109,43 @@ class QaydRepo(context: Context) {
         }
         val shopId = claims["shopId"] as? String
         if (role != Role.SuperAdmin && shopId.isNullOrBlank()) return null
-        return Account(u.uid, u.email.orEmpty(), u.displayName ?: u.email.orEmpty().substringBefore('@'), role, shopId)
+        val all = (listOfNotNull(shopId) + (claims["shops"] as? List<*>).orEmpty().map { it.toString() }).distinct()
+        val current = prefs.getString("current", null)?.takeIf { it in all } ?: shopId
+        return Account(u.uid, u.email.orEmpty(), u.displayName ?: u.email.orEmpty().substringBefore('@'), role, current, shopIds = all)
     }
 
     private fun save(a: Account) = prefs.edit()
         .putString("uid", a.uid).putString("role", a.role.name)
-        .putString("shopId", a.shopId).putString("name", a.displayName).apply()
+        .putString("shopId", a.shopId).putString("name", a.displayName).putString("shops", a.shopIds.joinToString(",")).apply()
+
+    /** التنقل بين محلات نفس الحساب بدون خروج. */
+    fun switchShop(id: String) {
+        val a = _account.value ?: return
+        if (id !in a.shopIds) return
+        prefs.edit().putString("current", id).apply()
+        val n = a.copy(shopId = id)
+        save(n)
+        _account.value = n
+    }
+
+    fun shopNames(ids: List<String>): Flow<Map<String, String>> = callbackFlow {
+        val names = java.util.concurrent.ConcurrentHashMap<String, String>()
+        val regs = ids.map { id ->
+            db.document("shops/$id").addSnapshotListener { s, _ -> s?.getString("name")?.let { names[id] = it; trySend(names.toMap()) } }
+        }
+        awaitClose { regs.forEach { it.remove() } }
+    }
+
+    suspend fun linkOwner(shopId: String, login: String, unlink: Boolean) {
+        admin("/v1/shops/link", JSONObject().put("shopId", shopId).put("login", login.trim().lowercase()).put("unlink", unlink))
+    }
 
     private fun loadCached(u: FirebaseUser): Account? {
         if (prefs.getString("uid", null) != u.uid) return null
         val role = prefs.getString("role", null)?.let { r -> Role.entries.firstOrNull { it.name == r } } ?: return null
-        return Account(u.uid, u.email.orEmpty(), prefs.getString("name", null) ?: u.email.orEmpty(), role, prefs.getString("shopId", null))
+        val shops = prefs.getString("shops", null)?.split(',')?.filter { it.isNotBlank() }.orEmpty()
+        val sid = prefs.getString("shopId", null)
+        return Account(u.uid, u.email.orEmpty(), prefs.getString("name", null) ?: u.email.orEmpty(), role, sid, shopIds = shops.ifEmpty { listOfNotNull(sid) })
     }
 
     /* ---------- المحلات ---------- */
@@ -523,7 +549,8 @@ class QaydRepo(context: Context) {
     suspend fun createStaff(username: String, displayName: String, password: String): String =
         admin(
             "/v1/staff",
-            JSONObject().put("username", username.trim().lowercase()).put("displayName", displayName.trim()).put("password", password),
+            JSONObject().put("username", username.trim().lowercase()).put("displayName", displayName.trim()).put("password", password)
+                .put("shopId", _account.value?.shopId.orEmpty()),
         ).getString("email")
 
     private suspend fun admin(path: String, body: JSONObject): JSONObject =

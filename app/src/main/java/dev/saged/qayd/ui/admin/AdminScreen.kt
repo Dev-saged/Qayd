@@ -294,6 +294,7 @@ private fun EditShopSheet(
             QButton("تسجيل دفعة وتمديد الاشتراك", { paying = true }, secondary = true)
             QButton("عرض المحل للدعم (قراءة فقط)", onSupport, secondary = true)
             QButton("النسخ الاحتياطية على الخادم", { backupsOpen = true }, secondary = true)
+            LinkOwnerBox(s, server)
             Column(
                 Modifier.padding(top = 8.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.danger.copy(alpha = .08f))
                     .border(1.dp, p.danger.copy(alpha = .35f), RoundedCornerShape(18.dp)).padding(14.dp),
@@ -551,6 +552,7 @@ class ServerOps(
     val restore: suspend (String, String) -> Unit = { _, _ -> },
     val wipe: suspend (String) -> Unit = {},
     val delete: suspend (String) -> Unit = {},
+    val link: suspend (String, String, Boolean) -> Unit = { _, _, _ -> },
 )
 
 @Composable
@@ -635,6 +637,41 @@ private fun DangerSheet(s: Shop, kind: String, server: ServerOps, onDone: () -> 
                     busy = false
                 }
             }, busy = busy, busyText = if (wipe) "جارٍ التفريغ…" else "جارٍ الحذف…")
+        }
+    }
+}
+
+/** ربط صاحب محل آخر بهذا المحل ليتنقل بين محلاته بدون خروج. */
+@Composable
+private fun LinkOwnerBox(s: Shop, server: ServerOps) {
+    val p = LocalPalette.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var login by rememberSaveable(s.id) { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
+    Column(
+        Modifier.padding(top = 4.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.surface2.copy(alpha = .55f))
+            .border(1.dp, p.line, RoundedCornerShape(18.dp)).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        T("صاحب لعدة محلات", size = 14.sp, weight = FontWeight.SemiBold)
+        T("اكتب حساب صاحب محل آخر ليصير مالكاً هنا أيضاً ويتنقل بين محلاته من الرئيسية.", size = 12.sp, color = p.mute, maxLines = 2)
+        QField(login, { login = it.trim() }, "حساب صاحب المحل", hint = "ahmad@anoar.ps", ltr = true)
+        msg?.let { (t, e) -> QNotice(t, error = e) }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(false to "ربط", true to "فك الربط").forEach { (unlink, l) ->
+                QButton(l, {
+                    if (login.isBlank()) return@QButton
+                    busy = true
+                    scope.launch {
+                        msg = runCatching { server.link(s.id, login, unlink) }.fold(
+                            { (if (unlink) "فُك الربط. يظهر التغيير عند فتح حسابه التالي." else "تم الربط. يظهر المحل عنده عند فتح التطبيق التالي.") to false },
+                            { (it.message ?: "تعذر") to true },
+                        )
+                        busy = false
+                    }
+                }, Modifier.weight(1f), busy = busy && !unlink, secondary = unlink)
+            }
         }
     }
 }

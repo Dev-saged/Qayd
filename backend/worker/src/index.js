@@ -209,7 +209,8 @@ async function createShop(env, caller, body) {
 
 async function createStaff(env, caller, body) {
   const isSuper = caller.super_admin === true;
-  const shopId = isSuper ? clean(body.shopId, 40) : caller.shopId;
+  const wanted = clean(body.shopId, 40);
+  const shopId = isSuper ? wanted : (wanted && (caller.shops || []).includes(wanted) ? wanted : caller.shopId);
   if (!isSuper && caller.role !== 'owner') throw new Fail(403, 'forbidden', 'صاحب المحل فقط يضيف موظفين');
   const shop = shopId && await getDoc(env, `shops/${shopId}`);
   if (!shop) throw new Fail(404, 'no_shop', 'المحل غير موجود');
@@ -331,6 +332,24 @@ async function removeShop(env, shopId) {
   return { removed: shopId };
 }
 
+/** ربط صاحب محل بمحل إضافي: عضو مالك فيه، ويُضاف المحل لقائمة محلاته في صلاحياته. */
+async function linkOwner(env, shopId, login, unlink) {
+  const shop = await getDoc(env, `shops/${shopId}`);
+  if (!shop) throw new Fail(404, 'no_shop', 'المحل غير موجود');
+  const r = await google(env, `${authBase(env)}/accounts:lookup`, 'POST', { email: [clean(login, 80).toLowerCase()] });
+  const u = r.users?.[0];
+  if (!u) throw new Fail(404, 'no_user', 'لا يوجد حساب بهذا الاسم');
+  const claims = JSON.parse(u.customAttributes || '{}');
+  if (claims.role !== 'owner') throw new Fail(400, 'not_owner', 'الحساب ليس صاحب محل');
+  if (claims.shopId === shopId) throw new Fail(400, 'primary', 'هذا محله الأساسي');
+  const shops = new Set(claims.shops || []);
+  if (unlink) shops.delete(shopId); else shops.add(shopId);
+  await google(env, `${authBase(env)}/accounts:update`, 'POST', { localId: u.localId, customAttributes: JSON.stringify({ ...claims, shops: [...shops] }) });
+  if (unlink) await commit(env, [{ delete: `${docsBase(env)}/shops/${shopId}/members/${u.localId}` }]);
+  else await commit(env, [write(env, `shops/${shopId}/members/${u.localId}`, { username: u.email, displayName: u.displayName || u.email, role: 'owner', perms: {}, active: true })]);
+  return { uid: u.localId, shops: [claims.shopId, ...shops] };
+}
+
 function requireSuper(caller) {
   if (caller.super_admin !== true) throw new Fail(403, 'forbidden', 'هذه العملية لمالك المنصة فقط');
 }
@@ -413,6 +432,7 @@ export default {
         return new Response(data, { headers: { 'content-type': 'application/json; charset=utf-8' } });
       }
       if (pathname === '/v1/backups/run') { requireSuper(caller); return json(200, await backupShop(env, clean(body.shopId, 40), 'manual')); }
+      if (pathname === '/v1/shops/link') { requireSuper(caller); return json(200, await linkOwner(env, clean(body.shopId, 40), body.login, body.unlink === true)); }
       if (pathname === '/v1/shops/remove') { requireSuper(caller); return json(200, await removeShop(env, clean(body.shopId, 40))); }
       throw new Fail(404, 'not_found', 'غير موجود');
     } catch (e) {

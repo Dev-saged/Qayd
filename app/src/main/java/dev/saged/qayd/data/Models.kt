@@ -36,6 +36,8 @@ data class Account(
     val role: Role,
     val shopId: String?,
     val avatar: Int? = null,
+    /** كل محلات الحساب (لصاحب أكثر من محل)، والمحل الحالي هو shopId. */
+    val shopIds: List<String> = listOfNotNull(shopId),
 )
 
 @Immutable

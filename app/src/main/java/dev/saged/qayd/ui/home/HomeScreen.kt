@@ -91,6 +91,7 @@ fun HomeScreen(
     onOrders: () -> Unit = {},
     notice: String? = null,
     onNoticeClose: () -> Unit = {},
+    onSwitchShop: (() -> Unit)? = null,
 ) {
     val haptic = LocalHapticFeedback.current
     val now by rememberNow()
@@ -104,7 +105,7 @@ fun HomeScreen(
             .padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Header(shop, account, sync, Modifier.entrance(0))
+        Header(shop, account, sync, Modifier.entrance(0), onSwitchShop)
         shop.daysLeft()?.takeIf { it <= 7 }?.let { d ->
             T(
                 if (d <= 0) "انتهى اشتراك المحل — تواصل مع المالك" else "اشتراك المحل ينتهي خلال $d يوم",
@@ -226,12 +227,18 @@ private fun QuickSale(l: Ledger, modifier: Modifier, onSale: () -> Unit, onTxTap
 }
 
 @Composable
-private fun Header(shop: Shop, account: Account, sync: SyncState, modifier: Modifier) {
+private fun Header(shop: Shop, account: Account, sync: SyncState, modifier: Modifier, onSwitch: (() -> Unit)? = null) {
     val p = LocalPalette.current
     Row(modifier.padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         dev.saged.qayd.ui.components.Avatar(account.avatar, account.displayName, 44.dp)
-        Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
-            T(shop.name, size = 16.sp, weight = FontWeight.SemiBold)
+        Column(
+            Modifier.weight(1f).padding(horizontal = 12.dp).clip(RoundedCornerShape(12.dp))
+                .then(if (onSwitch != null) Modifier.clickable(role = Role.Button, onClickLabel = "تبديل المحل", onClick = onSwitch) else Modifier),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                T(shop.name, size = 16.sp, weight = FontWeight.SemiBold)
+                if (onSwitch != null) QIcon(QIcons.Down, p.pri, Modifier.padding(start = 6.dp).size(14.dp))
+            }
             T(ltr(account.email), size = 12.sp, color = p.mute)
         }
         SyncChip(sync, Modifier.padding(end = 10.dp))
