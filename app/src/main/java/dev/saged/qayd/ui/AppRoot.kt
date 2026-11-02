@@ -246,6 +246,15 @@ private fun ShopRoot(vm: AppViewModel, account: Account, onExit: (() -> Unit)? =
             val templates by remember(shop.id) { vm.repo.templates(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val features by remember { vm.repo.features() }.collectAsStateWithLifecycle(emptyMap())
             val smsUsed by remember(shop.id) { vm.repo.smsUsed(shop.id) }.collectAsStateWithLifecycle(0)
+            val smsSettings by remember(shop.id) { vm.repo.smsSettings(shop.id) }.collectAsStateWithLifecycle(dev.saged.qayd.data.SmsSettings())
+            val gatewayRequest by remember(shop.id) { vm.repo.gatewayRequest(shop.id) }.collectAsStateWithLifecycle(null)
+            LaunchedEffect(smsSettings, customers.size) {
+                if (!support) {
+                    dev.saged.qayd.notify.SmsSchedule.sync(ctx, shop.id, smsSettings)
+                    // رموز الكشف تُنشأ عند الحاجة حين يكون الخيار مفعّلاً
+                    dev.saged.qayd.data.StatementLinks.of = if (smsSettings.link) ({ c -> vm.repo.ensureLink(shop.id, c) }) else ({ null })
+                }
+            }
             val products by remember(shop.id) { vm.repo.products(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val moves by remember(shop.id) { vm.repo.moves(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val stock = remember(products, moves) { dev.saged.qayd.data.StockState.of(products, moves) }
@@ -336,6 +345,7 @@ private fun ShopRoot(vm: AppViewModel, account: Account, onExit: (() -> Unit)? =
             val notice = broadcast?.takeIf { it.active && it.text.isNotBlank() && it.at > seenNotice }
             if (!access.active) return Blocked("حسابك موقوف من صاحب المحل", exit)
             QaydShell(shop, account, current.second, ledger, slots, actions, access, members, audit, prices, power, gateway, queue, templates, features, smsUsed, stock, suppliers, stockActions, menu, orders, orderActions, holds, holdActions,
+                smsSettings = smsSettings, gatewayRequest = gatewayRequest,
                 notice = notice?.text, onNoticeClose = { notice?.let { prefs.edit().putLong("seen", it.at).apply(); seenNotice = it.at } },
             ) { pad, nav ->
                 MoreScreen(
@@ -391,6 +401,11 @@ private fun shopActions(
         saveTemplate = { id, t, b, k -> r.saveTemplate(shopId, id, t, b, k) },
         deleteTemplate = { r.deleteTemplate(shopId, it) },
         gateway = { on -> runCatching { if (on) GatewayService.start(ctx, shopId) else GatewayService.stop(ctx) } },
+        setLimit = { c, v -> r.setLimit(shopId, c, v) },
+        setWaPrefix = { c, pre -> r.setWaPrefix(shopId, c, pre) },
+        saveSmsSettings = { r.saveSmsSettings(shopId, it) },
+        requestGateway = { r.requestGateway(shopId) },
+        answerGateway = { r.answerGatewayRequest(shopId, it) },
         backup = { runCatching { Backup.share(ctx, Backup.write(ctx, shopId, ledger, customers, readings, templates)) } },
     )
 }

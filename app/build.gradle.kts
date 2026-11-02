@@ -120,6 +120,7 @@ dependencies {
     implementation(libs.firebase.firestore)
     implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.zxing.core)
+    implementation(libs.androidx.work)
     implementation(libs.zxing.embedded) { isTransitive = false }
     implementation(libs.androidx.biometric)
 

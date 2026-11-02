@@ -38,6 +38,11 @@ data class Customer(
     val power: Boolean = false,
     val meter: String = "",
     val initialReading: Double = 0.0,
+    /** سقف الدين، و0 بلا سقف. */
+    val limit: Double = 0.0,
+    /** مقدمة واتساب المحفوظة للزبون: 970 أو 972. */
+    val waPrefix: String = "",
+    val link: String = "",
 )
 
 @Immutable

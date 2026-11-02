@@ -44,7 +44,7 @@ data class Template(val id: String, val title: String, val body: String, val kin
 
 object Templates {
     /** المتغيرات التي يمكن إدراجها في أي قالب. */
-    val VARS = listOf("الاسم", "المحل", "الرصيد", "المبلغ", "التاريخ", "الشهر", "القراءة_السابقة", "القراءة_الحالية", "الاستهلاك", "سعر_الكيلو")
+    val VARS = listOf("الاسم", "المحل", "الرصيد", "المبلغ", "التاريخ", "الشهر", "القراءة_السابقة", "القراءة_الحالية", "الاستهلاك", "سعر_الكيلو", "رابط_الكشف")
 
     val BUILT_IN = listOf(
         Template(
@@ -69,6 +69,35 @@ object Templates {
         ),
     )
 
-    fun fill(body: String, vars: Map<String, String>): String =
-        VARS.fold(body) { acc, k -> acc.replace("{$k}", vars[k] ?: "") }
+    /** يملأ القالب، ويُلحق رابط الكشف آخر الرسالة إن كان مفعّلاً ولم يُذكر في القالب. */
+    fun fill(body: String, vars: Map<String, String>): String {
+        val link = vars["رابط_الكشف"].orEmpty()
+        val withLink = if (link.isNotBlank() && "{رابط_الكشف}" !in body) "$body\nكشف حسابك: {رابط_الكشف}" else body
+        return VARS.fold(withLink) { acc, k -> acc.replace("{$k}", vars[k] ?: "") }.replace("كشف حسابك: \n", "").trimEnd()
+    }
+}
+
+/** إعدادات الرسائل للمحل: رابط الكشف، التذكير الشهري، وجوال الإرسال المعتمد. */
+@Immutable
+data class SmsSettings(
+    val link: Boolean = false,
+    val reminderOn: Boolean = false,
+    val reminderDay: Int = 1,
+    val reminderHour: Int = 10,
+    val reminderTemplate: String = "b_debt",
+    val reminderLateOnly: Boolean = false,
+    val gatewayDevice: String = "",
+    val gatewayName: String = "",
+)
+
+@Immutable
+data class GatewayRequest(val byName: String, val at: Long, val status: String) {
+    val pending get() = status == "pending" && System.currentTimeMillis() - at < 6 * 3_600_000L
+}
+
+/** روابط الكشف تُبنى من رمز الزبون. */
+object StatementLinks {
+    const val BASE = "https://qayd-admin.dev-mr07.workers.dev/s/"
+    /** يزوّده المحل حين يكون الخيار مفعّلاً؛ وإلا لا رابط. */
+    var of: (Customer) -> String? = { null }
 }

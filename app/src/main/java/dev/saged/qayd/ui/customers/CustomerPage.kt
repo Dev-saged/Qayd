@@ -60,6 +60,7 @@ fun CustomerPage(
     showBalance: Boolean = true,
     onSms: (() -> Unit)? = null,
     onPdf: (() -> Unit)? = null,
+    onLimit: (() -> Unit)? = null,
 ) {
     val p = LocalPalette.current
     val ctx = LocalContext.current
@@ -104,6 +105,15 @@ fun CustomerPage(
                     "مجموع الديون ${cur(history.filter { it.kind == TxKind.Debt }.sumOf { it.amount })} · الدفعات ${cur(history.filter { it.kind == TxKind.Payment }.sumOf { it.amount })}",
                     size = 12.sp, color = p.mute, maxLines = 2,
                 )
+                if (customer.limit > 0 || onLimit != null) {
+                    val over = customer.limit > 0 && b > customer.limit
+                    T(
+                        if (customer.limit > 0) "سقف الدين ${cur(customer.limit)}${if (over) " · متجاوز" else ""}" else "بلا سقف دين · اضغط لتحديده",
+                        Modifier.padding(top = 8.dp).clip(RoundedCornerShape(10.dp)).background((if (over) p.danger else p.warn).copy(alpha = .14f))
+                            .then(if (onLimit != null) Modifier.clickable(role = Role.Button, onClick = onLimit) else Modifier).padding(horizontal = 10.dp, vertical = 4.dp),
+                        12.sp, FontWeight.Medium, if (over) p.danger else p.warn,
+                    )
+                }
             }
         }
         item {

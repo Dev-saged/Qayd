@@ -74,6 +74,11 @@ class ShopActions(
     val deleteTemplate: (String) -> Unit = {},
     val gateway: (Boolean) -> Unit = {},
     val backup: () -> Unit = {},
+    val setLimit: (String, Double) -> Unit = { _, _ -> },
+    val setWaPrefix: (String, String) -> Unit = { _, _ -> },
+    val saveSmsSettings: (dev.saged.qayd.data.SmsSettings) -> Unit = {},
+    val requestGateway: () -> Unit = {},
+    val answerGateway: (Boolean) -> Unit = {},
 ) {
     companion object {
         val None = ShopActions({}, { _, _ -> }, { _, _ -> }, { _, _, _ -> }, {}, { _, _ -> "" }, { _, _, _ -> }, {})
@@ -87,6 +92,7 @@ sealed interface PadRequest {
     data class Payment(val customer: Customer) : PadRequest
     data class Expense(val recurring: RecurringStatus? = null) : PadRequest
     data class Price(val key: String, val title: String, val current: Double) : PadRequest
+    data class Limit(val customer: Customer) : PadRequest
 }
 
 @Composable

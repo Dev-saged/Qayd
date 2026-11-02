@@ -73,6 +73,7 @@
 
         <receiver android:name=".notify.PsAlarmReceiver" android:exported="false" />
         <receiver android:name=".system.InstallReceiver" android:exported="false" />
+        <receiver android:name=".notify.SmsScheduleReceiver" android:exported="false" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

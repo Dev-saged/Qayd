@@ -335,6 +335,43 @@ function requireSuper(caller) {
   if (caller.super_admin !== true) throw new Fail(403, 'forbidden', 'هذه العملية لمالك المنصة فقط');
 }
 
+/* ---------- صفحة كشف الحساب للزبون (رابط قصير) ---------- */
+const esc = (t) => String(t ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const KIND = { debt: 'دين', payment: 'دفعة', discount: 'خصم', sale: 'بيع' };
+
+async function statementPage(env, token) {
+  if (!/^[A-Za-z0-9]{5,12}$/.test(token)) return null;
+  const link = await getDoc(env, `links/${token}`);
+  if (!link) return null;
+  const [shop, cust] = await Promise.all([getDoc(env, `shops/${link.shopId}`), getDoc(env, `shops/${link.shopId}/customers/${link.customerId}`)]);
+  if (!shop || !cust || cust.deleted === true || cust.link !== token) return null;
+  const rows = await google(env, `https://firestore.googleapis.com/v1/${docsBase(env)}/shops/${link.shopId}:runQuery`, 'POST', {
+    structuredQuery: { from: [{ collectionId: 'tx' }], where: { fieldFilter: { field: { fieldPath: 'customerId' }, op: 'EQUAL', value: { stringValue: link.customerId } } }, limit: 1000 },
+  });
+  const tx = rows.filter((r) => r.document).map((r) => Object.fromEntries(Object.entries(r.document.fields || {}).map(([k, v]) => [k, fromValue(v)])))
+    .filter((t) => t.deleted !== true && KIND[t.kind]).sort((a, b) => (a.at < b.at ? 1 : -1));
+  const bal = tx.reduce((s, t) => s + (t.kind === 'debt' ? t.amount : t.kind === 'sale' ? 0 : -t.amount), 0);
+  const money = (v) => `${(Math.round(Math.abs(v) * 100) / 100).toLocaleString('en-US')} ₪`;
+  const date = (iso) => { const d = new Date(iso); return `${d.getUTCDate()}/${d.getUTCMonth() + 1}/${d.getUTCFullYear()}`; };
+  const list = tx.slice(0, 40).map((t) => `<li><span>${KIND[t.kind]}<small>${date(t.at)}</small></span><b class="${t.kind === 'debt' ? 'r' : 'g'}">${t.kind === 'debt' ? '+' : '−'}${money(t.amount)}</b></li>`).join('');
+  return `<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">
+<title>كشف حساب · ${esc(shop.name)}</title><style>
+:root{--bg:#0E1322;--s:#171E31;--l:#263049;--t:#F3ECDC;--m:#9AA3B5;--g:#E4B24C;--r:#F08A80;--ok:#7DD3A6}
+@media (prefers-color-scheme:light){:root{--bg:#F6F1E6;--s:#fff;--l:#E6DFCF;--t:#141826;--m:#5F6576;--g:#9C6B1C;--r:#B3261E;--ok:#1B7A4A}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--t);font:15px/1.6 system-ui,"Segoe UI",Tahoma,sans-serif}
+main{max-width:520px;margin:auto;padding:22px 16px 40px}h1{font-size:20px;margin:0}p{margin:2px 0;color:var(--m)}
+.card{background:var(--s);border:1px solid var(--l);border-radius:20px;padding:18px;margin-top:16px}
+.bal{font-size:34px;font-weight:700;margin-top:4px}.r{color:var(--r)}.g{color:var(--ok)}
+ul{list-style:none;margin:0;padding:0}li{display:flex;justify-content:space-between;align-items:center;padding:12px 0;border-bottom:1px solid var(--l)}li:last-child{border:0}
+li span{display:flex;flex-direction:column}small{color:var(--m);font-size:12px}b{direction:ltr}
+.rule{height:4px;border-top:2px solid var(--g);border-bottom:1px solid var(--g);margin:18px 0 8px;opacity:.8}footer{color:var(--m);font-size:12px;text-align:center}
+</style></head><body><main>
+<h1>${esc(shop.name)}</h1><p>كشف حساب: ${esc(cust.name)}</p>
+<div class="card"><p>${bal > 0 ? 'الرصيد المستحق' : bal < 0 ? 'رصيد مقدّم لكم' : 'الحساب مسدّد'}</p><div class="bal ${bal > 0 ? 'r' : 'g'}">${money(bal)}</div></div>
+<div class="card"><ul>${list || '<li><span>لا حركات</span></li>'}</ul></div>
+<div class="rule"></div><footer>قيد · كل حق في قيده</footer></main></body></html>`;
+}
+
 export default {
   async scheduled(event, env, ctx) {
     ctx.waitUntil(scheduled(env).catch(() => {}));
@@ -343,6 +380,12 @@ export default {
     const { pathname } = new URL(request.url);
     try {
       if (request.method === 'GET' && pathname === '/v1/health') return json(200, { ok: true });
+      if (request.method === 'GET' && pathname.startsWith('/s/')) {
+        if (!env.sa) env.sa = JSON.parse(env.FIREBASE_SA);
+        const html = await statementPage(env, pathname.slice(3));
+        return new Response(html || '<!doctype html><meta charset="utf-8"><p dir="rtl" style="font:16px system-ui;padding:24px">الرابط غير صالح أو أُلغي.</p>',
+          { status: html ? 200 : 404, headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } });
+      }
       if (request.method === 'GET' && pathname === '/v1/app/latest') {
         const meta = await env.QAYD_APP.get('meta', 'json');
         return json(meta ? 200 : 404, meta || { error: 'none' });

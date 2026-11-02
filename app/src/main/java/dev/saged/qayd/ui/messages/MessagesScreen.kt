@@ -83,6 +83,7 @@ fun smsVars(shop: Shop, c: CustomerBalance, reading: Reading? = null, amount: Do
         "القراءة_الحالية" to (reading?.curr?.let(::money) ?: ""),
         "الاستهلاك" to (reading?.kwh?.let(::money) ?: ""),
         "سعر_الكيلو" to (reading?.price?.let(::cur) ?: ""),
+        "رابط_الكشف" to (dev.saged.qayd.data.StatementLinks.of(c.customer)?.let { dev.saged.qayd.data.StatementLinks.BASE + it } ?: ""),
     )
 }
 
@@ -120,7 +121,18 @@ fun MessagesScreen(
     onRetry: (String) -> Unit,
     onEnqueue: (List<Triple<String, String, String>>, String) -> Unit,
     onTemplates: () -> Unit,
+    settings: dev.saged.qayd.data.SmsSettings = dev.saged.qayd.data.SmsSettings(),
+    isOwner: Boolean = false,
+    request: dev.saged.qayd.data.GatewayRequest? = null,
+    onSaveSettings: (dev.saged.qayd.data.SmsSettings) -> Unit = {},
+    onRequest: () -> Unit = {},
+    onAnswer: (Boolean) -> Unit = {},
 ) {
+    val ctx0 = LocalContext.current
+    val deviceId = remember { dev.saged.qayd.system.DeviceId.get(ctx0) }
+    val designated = settings.gatewayDevice.isNotBlank()
+    val mine = designated && settings.gatewayDevice == deviceId
+    var settingsOpen by remember { mutableStateOf(false) }
     val p = LocalPalette.current
     val ctx = LocalContext.current
     val now = rememberNow().value
@@ -139,6 +151,7 @@ fun MessagesScreen(
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 T("الرسائل", Modifier.weight(1f), 22.sp, FontWeight.Bold)
+                if (isOwner) IconTile(QIcons.Calendar, "إعدادات الرسائل", { settingsOpen = true }, Modifier.padding(end = 8.dp))
                 if (canTemplates) IconTile(QIcons.Edit, "القوالب", onTemplates)
             }
         }
@@ -156,16 +169,39 @@ fun MessagesScreen(
                     else "الرسائل تبقى في الطابور وتُرسل فور تشغيله على الجوال الذي فيه الشريحة.",
                     Modifier.padding(top = 6.dp), 12.5.sp, color = p.mute, maxLines = 2,
                 )
+                val start = {
+                    if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED) onGateway(true)
+                    else askSms.launch(Manifest.permission.SEND_SMS)
+                }
+                if (designated) T(
+                    if (mine) "هذا الجوال هو جوال الإرسال المعتمد" else "جوال الإرسال المعتمد: ${settings.gatewayName}",
+                    Modifier.padding(top = 8.dp), 12.5.sp, FontWeight.Medium, p.pri, maxLines = 2,
+                )
+                if (mine && request?.pending == true && !live) {
+                    Row(
+                        Modifier.padding(top = 12.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(p.warn.copy(alpha = .14f)).padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        T("${request.byName} يطلب تشغيل الإرسال", Modifier.weight(1f), 13.5.sp, FontWeight.Medium, maxLines = 2)
+                        T("رفض", Modifier.clip(RoundedCornerShape(10.dp)).clickable(role = Role.Button) { onAnswer(false) }.padding(8.dp), 13.sp, FontWeight.Medium, p.mute)
+                        T("قبول", Modifier.clip(RoundedCornerShape(10.dp)).background(p.pri).clickable(role = Role.Button) { onAnswer(true); start() }
+                            .padding(horizontal = 14.dp, vertical = 8.dp), 13.sp, FontWeight.SemiBold, p.onPri)
+                    }
+                }
                 if (canSend) {
                     Spacer(Modifier.height(12.dp))
-                    QButton(
-                        if (gatewayHere) "إيقاف الإرسال من هذا الجوال" else "اجعل هذا الجوال جوال الإرسال",
-                        {
-                            if (gatewayHere) onGateway(false)
-                            else if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED) onGateway(true)
-                            else askSms.launch(Manifest.permission.SEND_SMS)
-                        },
-                        secondary = gatewayHere,
+                    when {
+                        gatewayHere -> QButton("إيقاف الإرسال من هذا الجوال", { onGateway(false) }, secondary = true)
+                        !designated || mine -> QButton(if (mine) "تشغيل الإرسال" else "اجعل هذا الجوال جوال الإرسال", { start() })
+                        live -> Unit
+                        request?.pending == true -> T("أُرسل طلبك إلى ${settings.gatewayName}، بانتظار القبول.", size = 12.5.sp, color = p.mute, maxLines = 2)
+                        else -> QButton("اطلب تشغيل الإرسال", onRequest, secondary = true)
+                    }
+                    if (isOwner && !mine) T(
+                        "اعتماد هذا الجوال جوال الإرسال الوحيد",
+                        Modifier.padding(top = 8.dp).clip(RoundedCornerShape(10.dp)).clickable(role = Role.Button) {
+                            onSaveSettings(settings.copy(gatewayDevice = deviceId, gatewayName = dev.saged.qayd.system.DeviceId.name))
+                        }.padding(8.dp), 12.5.sp, FontWeight.Medium, p.pri,
                     )
                 }
             }
@@ -233,6 +269,7 @@ fun MessagesScreen(
     }
 
     if (restricted) dev.saged.qayd.ui.perms.RestrictedSmsSheet { restricted = false }
+    if (settingsOpen) SmsSettingsSheet(settings, templates, mine, onSaveSettings) { settingsOpen = false }
 
     bulk?.let { b ->
         val all = templates
@@ -284,6 +321,9 @@ fun SendSheet(
     preview: (Template) -> String,
     onSend: (Template) -> Unit,
     left: Int? = null,
+    smsEnabled: Boolean = true,
+    waPrefix: String? = null,
+    onWhatsApp: ((Template, String) -> Unit)? = null,
     onDismiss: () -> Unit,
 ) {
     val p = LocalPalette.current
@@ -306,7 +346,20 @@ fun SendSheet(
             T(preview(t), Modifier.padding(top = 14.dp).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(p.surface2).padding(14.dp), 13.5.sp, maxLines = 14)
         }
         Spacer(Modifier.height(16.dp))
-        if (left != null && count > left) {
+        if (onWhatsApp != null && t != null) {
+            // نفس الرقم قد يكون على واتساب بمقدمة 970 أو 972؛ المختارة تُحفظ للزبون
+            Row(Modifier.padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (waPrefix.isNullOrBlank()) {
+                    listOf("970", "972").forEach { pre -> QButton("واتساب ⁦+$pre⁩", { onWhatsApp(t, pre); onDismiss() }, Modifier.weight(1f), secondary = true) }
+                } else {
+                    QButton("واتساب ⁦+$waPrefix⁩", { onWhatsApp(t, waPrefix); onDismiss() }, Modifier.weight(1f), secondary = true)
+                    QButton("⁦+${if (waPrefix == "970") "972" else "970"}⁩", { onWhatsApp(t, if (waPrefix == "970") "972" else "970"); onDismiss() }, Modifier.weight(.6f), secondary = true)
+                }
+            }
+        }
+        if (!smsEnabled) {
+            T("رسائل SMS غير مفعّلة لمحلك، والإرسال عبر واتساب مجاني.", size = 12.sp, color = p.mute, maxLines = 2)
+        } else if (left != null && count > left) {
             dev.saged.qayd.ui.components.LockedCard(
                 "رسائل إضافية",
                 title = if (left == 0) "انتهت رسائل هذا الشهر" else "المتبقي $left رسالة فقط",
@@ -383,6 +436,64 @@ private fun TemplateSheet(t: Template, onSave: (String, String, TemplateKind) ->
             }
             QButton("حفظ", { if (title.isNotBlank() && body.isNotBlank()) onSave(title, body, kind) })
             if (onDelete != null) QButton("حذف القالب", onDelete, secondary = true)
+        }
+    }
+}
+
+/** يفتح محادثة واتساب بالنص جاهزاً، بالمقدمة المختارة للرقم المحلي. */
+fun openWhatsApp(ctx: android.content.Context, phone: String, prefix: String, text: String) {
+    val d = phone.filter { it.isDigit() }
+    val num = when {
+        d.startsWith("970") || d.startsWith("972") -> prefix + d.drop(3)
+        d.startsWith("00970") || d.startsWith("00972") -> prefix + d.drop(5)
+        d.startsWith("0") -> prefix + d.drop(1)
+        else -> prefix + d
+    }
+    runCatching {
+        ctx.startActivity(
+            android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://wa.me/$num?text=" + android.net.Uri.encode(text)))
+                .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
+        )
+    }
+}
+
+/** إعدادات الرسائل: رابط الكشف والتذكير الشهري المجدول. */
+@Composable
+private fun SmsSettingsSheet(
+    s: dev.saged.qayd.data.SmsSettings, templates: List<Template>, mine: Boolean,
+    onSave: (dev.saged.qayd.data.SmsSettings) -> Unit, onDismiss: () -> Unit,
+) {
+    val p = LocalPalette.current
+    var v by remember { mutableStateOf(s) }
+    QSheet("إعدادات الرسائل", onDismiss, footer = { QButton("حفظ", { onSave(v); onDismiss() }) }) {
+        dev.saged.qayd.ui.components.QSwitchGroup("رابط الكشف", listOf(
+            dev.saged.qayd.ui.components.SwitchItem("إضافة رابط كشف الحساب للرسائل", v.link, { v = v.copy(link = it) },
+                "رابط قصير في آخر الرسالة يفتح فيه الزبون رصيده وحركاته بدون تطبيق"),
+        ))
+        Spacer(Modifier.height(14.dp))
+        dev.saged.qayd.ui.components.QSwitchGroup("التذكير الشهري", listOf(
+            dev.saged.qayd.ui.components.SwitchItem("تذكير المدينين تلقائياً كل شهر", v.reminderOn, { v = v.copy(reminderOn = it) },
+                "يُرسل من جوال الإرسال المعتمد، مع تنبيه قبل الموعد بساعة"),
+            dev.saged.qayd.ui.components.SwitchItem("المتأخرون فقط", v.reminderLateOnly, { v = v.copy(reminderLateOnly = it) }, "بدل كل من عليه رصيد"),
+        ))
+        if (v.reminderOn) {
+            Spacer(Modifier.height(10.dp))
+            dev.saged.qayd.ui.components.QStepper("يوم الشهر", v.reminderDay, 1..28) { v = v.copy(reminderDay = it) }
+            dev.saged.qayd.ui.components.QStepper("الساعة", v.reminderHour, 0..23) { v = v.copy(reminderHour = it) }
+            T("القالب", Modifier.padding(top = 8.dp, bottom = 6.dp), 13.sp, FontWeight.SemiBold)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                templates.filter { it.kind == TemplateKind.Debt || it.kind == TemplateKind.General }.forEach { t ->
+                    val on = t.id == v.reminderTemplate
+                    T(t.title, Modifier.clip(RoundedCornerShape(12.dp)).background(if (on) p.pri.copy(alpha = .18f) else p.surface2)
+                        .clickable(role = Role.RadioButton) { v = v.copy(reminderTemplate = t.id) }.padding(horizontal = 12.dp, vertical = 8.dp), 13.sp,
+                        if (on) FontWeight.SemiBold else FontWeight.Normal, if (on) p.pri else p.ink)
+                }
+            }
+            T(
+                if (v.gatewayDevice.isBlank()) "اعتمد جوال الإرسال من بطاقة الإرسال أولاً، فالتذكير يعمل منه فقط."
+                else if (mine) "هذا الجوال سيرسل التذكير في الموعد." else "سيرسل التذكير جوال: ${v.gatewayName}",
+                Modifier.padding(top = 10.dp), 12.sp, color = if (v.gatewayDevice.isBlank()) p.warn else p.mute, maxLines = 2,
+            )
         }
     }
 }

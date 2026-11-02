@@ -24,7 +24,7 @@ sealed interface Session {
 data class Op(val busy: Boolean = false, val error: String? = null, val done: String? = null)
 
 class AppViewModel(app: Application) : AndroidViewModel(app) {
-    val repo = QaydRepo(app)
+    val repo = QaydRepo.get(app)
 
     val session: StateFlow<Session> = combine(repo.ready, repo.account) { ready, acc ->
         when {

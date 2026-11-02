@@ -53,6 +53,12 @@ service cloud.firestore {
       allow read, write: if isSuper();
     }
 
+    // رموز روابط الكشف: يقرؤها الـ Worker فقط
+    match /links/{token} {
+      allow create: if signedIn() && request.resource.data.shopId == request.auth.token.get('shopId', '')
+        && request.resource.data.keys().hasOnly(['shopId', 'customerId', 'createdAt']);
+    }
+
     match /suffixes/{suffix} {
       allow read: if isSuper();
       allow write: if false;
@@ -79,7 +85,9 @@ service cloud.firestore {
 
       match /customers/{id} {
         allow read: if member(shopId);
-        allow create, update: if byMe() && (can(shopId, 'manageCustomers') || can(shopId, 'addDebt') || can(shopId, 'manageElectricity'));
+        allow create: if byMe() && (can(shopId, 'manageCustomers') || can(shopId, 'addDebt') || can(shopId, 'manageElectricity'));
+        allow update: if (can(shopId, 'manageCustomers') || can(shopId, 'addDebt') || can(shopId, 'manageElectricity'))
+          && (byMe() || onlyChanges(['limit', 'waPrefix', 'link', 'updatedAt']));
       }
 
       match /tx/{id} {

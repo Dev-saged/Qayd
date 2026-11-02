@@ -168,6 +168,8 @@ fun QaydShell(
     holdActions: dev.saged.qayd.ui.holds.HoldActions = dev.saged.qayd.ui.holds.HoldActions.None,
     notice: String? = null,
     onNoticeClose: () -> Unit = {},
+    smsSettings: dev.saged.qayd.data.SmsSettings = dev.saged.qayd.data.SmsSettings(),
+    gatewayRequest: dev.saged.qayd.data.GatewayRequest? = null,
     more: @Composable (PaddingValues, MoreNav) -> Unit,
 ) = androidx.compose.runtime.CompositionLocalProvider(
     dev.saged.qayd.ui.components.LocalQuickAdds provides dev.saged.qayd.data.BizType.of(shop.type).quickAdds,
@@ -190,6 +192,7 @@ fun QaydShell(
     var psDebt by remember { mutableStateOf<PsSlot?>(null) }
     var pricesOpen by rememberSaveable { mutableStateOf(false) }
     var smsFor by remember { mutableStateOf<String?>(null) }
+    var overLimit by remember { mutableStateOf<Pair<dev.saged.qayd.data.Customer, Double>?>(null) }
     val ctx = LocalContext.current
     var gatewayHere by remember { mutableStateOf(GatewayService.isOn(ctx)) }
     val allTemplates = Templates.BUILT_IN + templates
@@ -220,7 +223,8 @@ fun QaydShell(
                                 onDebt = { pad = PadRequest.Debt(c) }.takeIf { access.can(Perm.AddDebt) },
                                 onPayment = { pad = PadRequest.Payment(c) }.takeIf { access.can(Perm.AddPayment) },
                                 showBalance = access.can(Perm.ViewBalances),
-                                onSms = { smsFor = c.id }.takeIf { access.can(Perm.SendSms) && Module.Sms in shop.modules },
+                                onSms = { smsFor = c.id }.takeIf { access.can(Perm.SendSms) },
+                                onLimit = { pad = PadRequest.Limit(c) }.takeIf { access.can(Perm.ManageCustomers) },
                                 onPdf = {
                                     runCatching { pdf.share(pdf.statement(shop, c, ledger.history(c.id))) }
                                     Unit
@@ -280,6 +284,8 @@ fun QaydShell(
                                 canSend = access.can(Perm.SendSms), canTemplates = access.can(Perm.ManageTemplates), gatewayHere = gatewayHere,
                                 onGateway = { on -> gatewayHere = on; actions.gateway(on) }, onRetry = actions.retrySms,
                                 onEnqueue = actions.enqueueSms, onTemplates = { page = Page.Templates },
+                                settings = smsSettings, isOwner = owner, request = gatewayRequest,
+                                onSaveSettings = actions.saveSmsSettings, onRequest = actions.requestGateway, onAnswer = actions.answerGateway,
                             )
                         } else if (Module.Sms in full.modules) {
                             Column(Modifier.padding(pad0).padding(20.dp)) { LockedCard(Module.Sms.label) }
@@ -350,10 +356,19 @@ fun QaydShell(
 
     when (val r = pad) {
         PadRequest.Sale -> NumpadSheet("بيع سريع", "يُسجل كبيع للمحل مباشرة", p.ok, "سجّل البيع", onDismiss = { pad = null }) { v, _ -> actions.sale(v) }
-        is PadRequest.Debt -> NumpadSheet(
-            "دين على ${r.customer.name}", balanceText(ledger.balanceOf(r.customer.id)?.balance ?: 0.0, p).first,
-            p.danger, "أضف الدين", onDismiss = { pad = null },
-        ) { v, _ -> actions.debt(r.customer.id, v) }
+        is PadRequest.Debt -> {
+            val bal = ledger.balanceOf(r.customer.id)?.balance ?: 0.0
+            val lim = r.customer.limit
+            NumpadSheet(
+                "دين على ${r.customer.name}", balanceText(bal, p).first + if (lim > 0) " · السقف ${cur(lim)}" else "",
+                p.danger, "أضف الدين", onDismiss = { pad = null },
+                preview = if (lim > 0) ({ v -> if (bal + v > lim) "يتجاوز السقف بـ ${cur(bal + v - lim)}" to false else "المتبقي من السقف ${cur(lim - bal - v)}" to true }) else null,
+            ) { v, _ -> if (lim > 0 && bal + v > lim) overLimit = r.customer to v else actions.debt(r.customer.id, v) }
+        }
+        is PadRequest.Limit -> NumpadSheet(
+            "سقف دين ${r.customer.name}", "أقصى رصيد مسموح عليه · 0 بلا سقف", p.warn, "حفظ السقف",
+            initial = AmountInput.of(r.customer.limit), onDismiss = { pad = null },
+        ) { v, _ -> actions.setLimit(r.customer.id, v) }
         is PadRequest.Payment -> NumpadSheet(
             "دفعة من ${r.customer.name}", balanceText(ledger.balanceOf(r.customer.id)?.balance ?: 0.0, p).first,
             p.ok, "سجّل الدفعة", onDismiss = { pad = null },
@@ -373,6 +388,22 @@ fun QaydShell(
         null -> Unit
     }
 
+    overLimit?.let { (c, v) ->
+        dev.saged.qayd.ui.components.QSheet("تجاوز سقف الدين", { overLimit = null }) {
+            val bal = ledger.balanceOf(c.id)?.balance ?: 0.0
+            T("${c.name} رصيده ${cur(bal)} وسقفه ${cur(c.limit)}. بعد هذا الدين يصبح ${cur(bal + v)}.", size = 14.sp, maxLines = 3)
+            Spacer(Modifier.height(16.dp))
+            if (access.can(Perm.ManageCustomers)) {
+                dev.saged.qayd.ui.components.QButton("سجّل رغم تجاوز السقف", { actions.debt(c.id, v); overLimit = null }, secondary = true)
+                Spacer(Modifier.height(8.dp))
+            } else {
+                T("تحتاج موافقة صاحب المحل لتجاوز السقف.", size = 12.5.sp, color = p.mute)
+                Spacer(Modifier.height(8.dp))
+            }
+            dev.saged.qayd.ui.components.QButton("إلغاء", { overLimit = null })
+        }
+    }
+
     smsFor?.let { id ->
         val c = ledger.balanceOf(id)
         if (c != null) {
@@ -382,6 +413,12 @@ fun QaydShell(
                 preview = { t -> Templates.fill(t.body, smsVars(shop, c, reading)) },
                 onSend = { t -> actions.enqueueSms(listOf(Triple(c.customer.phone, c.customer.name, Templates.fill(t.body, smsVars(shop, c, reading)))), t.title) },
                 left = full.smsLeft(smsUsed),
+                smsEnabled = Module.Sms in shop.modules,
+                waPrefix = c.customer.waPrefix,
+                onWhatsApp = { t, pre ->
+                    if (pre != c.customer.waPrefix) actions.setWaPrefix(c.customer.id, pre)
+                    dev.saged.qayd.ui.messages.openWhatsApp(ctx, c.customer.phone, pre, Templates.fill(t.body, smsVars(shop, c, reading)))
+                },
             ) { smsFor = null }
         }
     }

@@ -35,6 +35,13 @@ import java.net.URL
 
 /** الدخول، claims المخزنة للعمل بدون إنترنت، مستمعو Firestore، واستدعاء Worker الإدارة. */
 class QaydRepo(context: Context) {
+    companion object {
+        @Volatile private var instance: QaydRepo? = null
+
+        /** نسخة واحدة للتطبيق، تستخدمها الواجهة والمهام الخلفية. */
+        fun get(c: Context): QaydRepo = instance ?: synchronized(this) { instance ?: QaydRepo(c.applicationContext).also { instance = it } }
+    }
+
     private val auth = FirebaseAuth.getInstance()
     private val db = FirebaseFirestore.getInstance()
     private val prefs = context.getSharedPreferences("qayd_session", Context.MODE_PRIVATE)
@@ -211,6 +218,7 @@ class QaydRepo(context: Context) {
         Customer(
             it.id, it.getString("name").orEmpty(), it.getString("phone").orEmpty(), it.getString("note").orEmpty(), it.millis("createdAt"),
             it.getBoolean("power") == true, it.getString("meter").orEmpty(), it.getDouble("initialReading") ?: 0.0,
+            it.getDouble("limit") ?: 0.0, it.getString("waPrefix").orEmpty(), it.getString("link").orEmpty(),
         )
     }
 
@@ -871,5 +879,64 @@ class QaydRepo(context: Context) {
         v.has("mapValue") -> v.getJSONObject("mapValue").optJSONObject("fields")?.let { f -> f.keys().asSequence().associateWith { rest(f.getJSONObject(it)) } } ?: emptyMap<String, Any?>()
         v.has("arrayValue") -> v.getJSONObject("arrayValue").optJSONArray("values")?.let { a -> (0 until a.length()).map { rest(a.getJSONObject(it)) } } ?: emptyList<Any?>()
         else -> null
+    }
+
+    /* ---------- سقف الدين، واتساب، رابط الكشف، جوال الإرسال ---------- */
+
+    fun setLimit(shopId: String, customerId: String, limit: Double) {
+        db.document("shops/$shopId/customers/$customerId").update(mapOf("limit" to round2(limit), "updatedAt" to FieldValue.serverTimestamp()))
+    }
+
+    fun setWaPrefix(shopId: String, customerId: String, prefix: String) {
+        db.document("shops/$shopId/customers/$customerId").update(mapOf("waPrefix" to prefix, "updatedAt" to FieldValue.serverTimestamp()))
+    }
+
+    /** رمز قصير للزبون يُنشأ مرة واحدة ويُحفظ معه. */
+    fun ensureLink(shopId: String, c: Customer): String {
+        if (c.link.isNotBlank()) return c.link
+        val abc = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+        val token = (1..7).map { abc[java.security.SecureRandom().nextInt(abc.length)] }.joinToString("")
+        db.batch().apply {
+            set(db.document("links/$token"), mapOf("shopId" to shopId, "customerId" to c.id, "createdAt" to FieldValue.serverTimestamp()))
+            update(db.document("shops/$shopId/customers/${c.id}"), mapOf("link" to token))
+        }.commit()
+        return token
+    }
+
+    fun smsSettings(shopId: String): Flow<SmsSettings> = callbackFlow {
+        val reg = db.document("shops/$shopId/settings/sms").addSnapshotListener { s, _ ->
+            trySend(
+                if (s == null || !s.exists()) SmsSettings() else SmsSettings(
+                    s.getBoolean("link") == true, s.getBoolean("reminderOn") == true,
+                    (s.getLong("reminderDay") ?: 1L).toInt(), (s.getLong("reminderHour") ?: 10L).toInt(),
+                    s.getString("reminderTemplate") ?: "b_debt", s.getBoolean("reminderLateOnly") == true,
+                    s.getString("gatewayDevice").orEmpty(), s.getString("gatewayName").orEmpty(),
+                ),
+            )
+        }
+        awaitClose { reg.remove() }
+    }
+
+    fun saveSmsSettings(shopId: String, v: SmsSettings) {
+        db.document("shops/$shopId/settings/sms").set(mapOf(
+            "link" to v.link, "reminderOn" to v.reminderOn, "reminderDay" to v.reminderDay, "reminderHour" to v.reminderHour,
+            "reminderTemplate" to v.reminderTemplate, "reminderLateOnly" to v.reminderLateOnly,
+            "gatewayDevice" to v.gatewayDevice, "gatewayName" to v.gatewayName,
+        ))
+    }
+
+    fun gatewayRequest(shopId: String): Flow<GatewayRequest?> = callbackFlow {
+        val reg = db.document("shops/$shopId/gateway/request").addSnapshotListener { s, _ ->
+            trySend(s?.takeIf { it.exists() }?.let { GatewayRequest(it.getString("byName").orEmpty(), it.millis("at"), it.getString("status").orEmpty()) })
+        }
+        awaitClose { reg.remove() }
+    }
+
+    fun requestGateway(shopId: String) {
+        db.document("shops/$shopId/gateway/request").set(mapOf("byName" to _account.value?.displayName, "at" to FieldValue.serverTimestamp(), "status" to "pending"))
+    }
+
+    fun answerGatewayRequest(shopId: String, accepted: Boolean) {
+        db.document("shops/$shopId/gateway/request").update(mapOf("status" to if (accepted) "accepted" else "declined"))
     }
 }
