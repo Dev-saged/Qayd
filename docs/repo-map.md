@@ -1,5 +1,34 @@
 # repo-map — قيد
 
+> v1.12.0 | أول ما تفتح: هذا الملف ثم `.claude/session-handoff.md`. لا تقرأ ملفاً كبيراً كاملاً: استخدم Grep على الاسم من "Quick index" ثم Read بنطاق أسطر.
+> الأكبر حجماً (لا تقرأه كاملاً): QaydRepo 1005، AdminScreen 677، QaydShell 632، MessagesScreen 499، AppRoot 478، OrdersPage 432، HomeScreen 421.
+
+## Quick index (ميزة → ملف → ابحث بـ)
+- حسابات/جلسة/كلايمز/تبديل محل → `data/QaydRepo.kt` (`switchShop`, `shopNames`, `signIn`), `ui/AppRoot.kt` (`AdminRoot`, `ShopRoot`), `ui/AppViewModel.kt`
+- دين/دفعة/خصم/رصيد مشتق/سقف → `data/Ledger.kt` (`Ledger.of`, `TxKind`, `Customer.limit`), `ui/customers/*`, `PadRequest` في `ui/shell/ShellSheets.kt`
+- طرق الدفع والتحويلات وإغلاق الصندوق → `data/Team.kt` (`CashClose`, `Ledger.cashToday`), `ui/money/MoneyPages.kt`, `QaydRepo` (`verifyTx`, `setPayer`, `wallets`)
+- تقارير (byWallet, خصومات, أهم الزبائن) → `data/Reports.kt`, `ui/reports/ReportsPage.kt`
+- رسائل SMS/قوالب/جماعي/واتساب → `data/Sms.kt`, `ui/messages/MessagesScreen.kt`, `gateway/GatewayService.kt`
+- تذكير شهري وجوال الإرسال المعتمد → `notify/SmsSchedule.kt`, `QaydRepo` (`requestGateway`, `answerGatewayRequest`), `settings/sms.gatewayDevice`
+- رابط كشف الحساب → `Sms.kt` (`StatementLinks`), `QaydRepo.ensureLink`, Worker `GET /s/{token}`
+- صوت → `voice/VoiceParse.kt` (تحليل محلي), `voice/VoiceInbox.kt` (تسجيل + تعرّف + صندوق), `ui/voice/VoiceUi.kt`
+- مخزون/مورّدون/طلبات/محجوزات/قائمة → `data/Stock|Suppliers|Orders|Holds.kt` + `ui/stock|suppliers|orders|holds/*`, طابعة `system/BtPrinter.kt`
+- بلايستيشن/كهرباء/مصاريف → `ui/ps`, `data/Power.kt`+`ui/power`, `ui/expenses`, تنبيهات `notify/PsAlarms.kt`
+- لوحة المالك (محلات، باقات، مدفوعات، نسخ الخادم، حذف، ربط مالك) → `ui/admin/AdminScreen.kt`, `data/Platform.kt`, `QaydRepo` (`wipeShop`, `deleteShop`, `restoreServerBackup`, `linkOwner`)
+- التحديث الذاتي وصفحة التحديثات → `system/Updater.kt`, `Updates.kt`, `InstallReceiver.kt`, `ui/updates/UpdateUi.kt`
+- صلاحيات النظام (SMS المقيّد…) → `system/Perms.kt`, `ui/perms/PermissionsScreen.kt`
+- PDF/فواتير → `pdf/QaydPdf.kt`; ملفات التنزيل → `system/QaydFiles.kt`; نسخ تلقائي → `system/AutoBackup.kt`
+- أمان محلي → `system/SavedLogins.kt` (Keystore AES-GCM), `AppLock.kt`; ويدجت → `system/QaydWidget.kt`
+- تصميم → `config/BrandConfig.kt`, `ui/theme/Theme.kt`, `ui/icons/QIcons.kt`, `ui/components/*` (Avatars = 12 شخصية)
+- الخلفية: `backend/firestore.rules`, `backend/worker/src/index.js` (مسارات /v1/shops|staff|app|backups|shops/remove|shops/link, cron */10)
+- أنواع النشاط والوحدات → `data/Business.kt` (BizType), `data/Models.kt` (Module, Shop), `config/features` في Firestore
+
+## Deploy (من جذر المستودع)
+- بناء: `ANDROID_HOME=/home/claude/android-sdk ./gradlew assembleDebug` (+ `ROBOLECTRIC_DEPS_DIR=/home/claude/robo-deps` للاختبارات).
+- قواعد: `. secrets/backend.env; FIREBASE_SA_PATH=secrets/firebase-admin.json node backend/scripts/deploy-rules.mjs`
+- Worker: `(cd backend/worker && npx -y wrangler@4 deploy)` ثم `node backend/scripts/smoke-admin.mjs` (35 فحصاً، آخر تشغيل v1.1.0).
+- النشر: push إلى main ينتج Release وAPK ويرفع KV؛ ملاحظات النسخة في `docs/releases/vX.Y.Z.md` وتُنسخ لـ assets عبر مهمة `releaseNotes`.
+
 ## Layout
 - `app/src/main/java/dev/saged/qayd/`
   - `MainActivity.kt` — splash, edge-to-edge, sets QaydTheme + QaydShell.
@@ -74,3 +103,11 @@
 ## Solved bugs
 - Signed amounts flipped ("300+") inside RTL text → wrap in LTR isolate (`ltr()` in HomeScreen).
 - Light theme: dark text on gold FAB/avatar failed contrast → BrandConfig onPri light tone.
+- SEND_SMS محجوب بعد التثبيت اليدوي (Restricted settings) وخروج التطبيق عند تفعيل البوابة → تثبيت عبر PackageInstaller session (PACKAGE_SOURCE_STORE) + فحص الصلاحية قبل تشغيل الخدمة + خطوات "السماح بالإعدادات المقيّدة".
+- زر "متابعة" في الصلاحيات يرجع للرئيسية → الشاشة overlay داخل AppRoot مع BackHandler.
+- شريط الحالة يتداخل مع المحتوى → scrim بارتفاع statusBars (windowInsetsTopHeight).
+- Robolectric لا يولّد PDF حقيقياً → QaydPdf.Out + preview callback يرسم Bitmap.
+- ShellSnapshotTest يكسر عند تغيير توقيع LoginScreen → حدّث الاختبار بـ `LoginScreen(Op(...), onSubmit = { _, _ -> })`.
+- إضافة موظف تذهب للمحل الأساسي بدل الحالي لمالك متعدد المحلات → createStaff يرسل shopId الحالي.
+- واتساب: لا يمكن كشف المقدمة تلقائياً → اختيار +970/+972 يُحفظ لكل زبون (Customer.waPrefix).
+- Gradle "daemon disappeared" / فشل CI عابر → أعد التشغيل قبل البحث عن خلل؛ CI "cancelled" سببه push لاحق.
