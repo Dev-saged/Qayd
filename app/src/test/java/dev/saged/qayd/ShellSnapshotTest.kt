@@ -114,7 +114,7 @@ class ShellSnapshotTest {
 
     @Test fun homeLight() = snap("home", false, home)
 
-    @Test fun login() = snap("login", true) { LoginScreen(Op(error = "اسم المستخدم أو كلمة السر غير صحيحة")) { _, _ -> } }
+    @Test fun login() = snap("login", true) { LoginScreen(Op(error = "اسم المستخدم أو كلمة السر غير صحيحة"), onSubmit = { _, _ -> }) }
 
     @Test fun admin() = snap("admin", true) {
         AdminScreen(
