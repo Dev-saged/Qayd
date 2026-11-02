@@ -21,6 +21,8 @@ enum class Perm(val key: String, val label: String, val group: String) {
     ManageStock("manageStock", "إدارة الأصناف والمخزون", "الوحدات"),
     ManageSuppliers("manageSuppliers", "الموردون وفواتير الشراء", "الوحدات"),
     ManageMenu("manageMenu", "تعديل قائمة الطعام", "الوحدات"),
+    ConfirmTransfers("confirmTransfers", "مراجعة التحويلات وتأكيدها", "الإدارة"),
+    Discount("discount", "منح خصم للزبون", "المبيعات والديون"),
 }
 
 @Immutable
@@ -59,4 +61,18 @@ fun Ledger.shift(uid: String, today: Long): ShiftTotals {
         collected = round2(mine.filter { it.kind == TxKind.Payment }.sumOf { it.amount }),
         debts = round2(mine.filter { it.kind == TxKind.Debt }.sumOf { it.amount }),
     )
+}
+
+/** إغلاق صندوق: المتوقع من حركات اليوم والفعلي في الدرج والفرق. */
+@Immutable
+data class CashClose(val id: String, val byName: String, val by: String, val at: Long, val expected: Double, val actual: Double, val note: String) {
+    val diff get() = round2(actual - expected)
+}
+
+/** نقد هذا العضو اليوم: المبيعات والدفعات النقدية ناقص مصروفاته. */
+fun Ledger.cashToday(uid: String, today: Long): Triple<Double, Double, Double> {
+    val mine = allTx.filter { it.by == uid && it.at >= today && it.wallet == null }
+    val inflow = round2(mine.filter { it.kind == TxKind.Sale || it.kind == TxKind.Payment }.sumOf { it.amount })
+    val out = round2(mine.filter { it.kind == TxKind.Expense }.sumOf { it.amount })
+    return Triple(inflow, out, round2(inflow - out))
 }

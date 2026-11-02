@@ -8,7 +8,8 @@ enum class TxKind(val key: String, val label: String) {
     Sale("sale", "بيع"),
     Debt("debt", "دين"),
     Payment("payment", "دفعة"),
-    Expense("expense", "مصروف");
+    Expense("expense", "مصروف"),
+    Discount("discount", "خصم");
 
     companion object {
         fun of(key: String?) = entries.firstOrNull { it.key == key }
@@ -60,6 +61,12 @@ data class Tx(
     val by: String = "",
     val source: String? = null,
     val ref: String? = null,
+    /** المحفظة أو البنك للتحويل، وnull للنقدي. */
+    val wallet: String? = null,
+    val payer: String = "",
+    val payerPhone: String = "",
+    /** حالة مراجعة التحويل: pending أو ok أو missing. */
+    val verify: String? = null,
 )
 
 @Immutable
@@ -120,7 +127,7 @@ data class Ledger(
 
         private fun signed(t: Tx) = when (t.kind) {
             TxKind.Debt -> t.amount
-            TxKind.Payment -> -t.amount
+            TxKind.Payment, TxKind.Discount -> -t.amount
             else -> 0.0
         }
 
@@ -128,7 +135,7 @@ data class Ledger(
             val today = dayStart(now)
             val month = monthStart(now)
             val sorted = txs.sortedByDescending { it.at }
-            val byCustomer = sorted.filter { it.customerId != null && (it.kind == TxKind.Debt || it.kind == TxKind.Payment) }
+            val byCustomer = sorted.filter { it.customerId != null && (it.kind == TxKind.Debt || it.kind == TxKind.Payment || it.kind == TxKind.Discount) }
                 .groupBy { it.customerId!! }
 
             val balances = customers.map { c ->
@@ -150,7 +157,7 @@ data class Ledger(
             }
 
             // منحنى إجمالي الديون آخر 14 يوماً (نهاية كل يوم)
-            val debtTx = sorted.filter { it.kind == TxKind.Debt || it.kind == TxKind.Payment }
+            val debtTx = sorted.filter { it.kind == TxKind.Debt || it.kind == TxKind.Payment || it.kind == TxKind.Discount }
             val total = balances.sumOf { it.balance }
             val trend = (13 downTo 0).map { d ->
                 val end = today + 86_400_000L - d * 86_400_000L

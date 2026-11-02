@@ -10,7 +10,7 @@ const STAFF_PERMS = {
   quickSale: true, addDebt: true, addPayment: true, manageCustomers: true, deleteTx: false,
   viewBalances: true, expenses: false, managePs: true, setPrices: false, recordReadings: true,
   manageElectricity: false, sendSms: true, manageTemplates: false, exportPdf: true, viewReports: false,
-  manageStock: false, manageSuppliers: false, manageMenu: false,
+  manageStock: false, manageSuppliers: false, manageMenu: false, confirmTransfers: false, discount: false,
 };
 
 class Fail extends Error {

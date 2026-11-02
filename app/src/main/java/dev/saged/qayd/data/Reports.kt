@@ -13,6 +13,9 @@ data class Report(
     val powerMonth: Double,
     val topDebtors: List<CustomerBalance>,
     val byMember: List<Pair<String, Double>>,
+    val monthDiscounts: Double = 0.0,
+    val byWallet: List<Pair<String, Double>> = emptyList(),
+    val topCustomers: List<Pair<CustomerBalance, Double>> = emptyList(),
 ) {
     /** الدخل النقدي = المبيعات + التحصيل، والصافي بعد المصروفات. */
     val income get() = round2(monthSales + monthCollected)
@@ -38,5 +41,24 @@ fun Ledger.report(now: Long): Report {
         topDebtors = customers.filter { it.balance > 0 }.sortedByDescending { it.balance }.take(5),
         byMember = inMonth.filter { it.kind == TxKind.Sale || it.kind == TxKind.Payment }
             .groupBy { it.byName.ifBlank { "—" } }.map { (k, v) -> k to round2(v.sumOf { it.amount }) }.sortedByDescending { it.second },
+        monthDiscounts = sum(TxKind.Discount),
+        byWallet = inMonth.filter { (it.kind == TxKind.Sale || it.kind == TxKind.Payment) && it.verify != "missing" }
+            .groupBy { it.wallet ?: "نقدي" }.map { (k, v) -> k to round2(v.sumOf { it.amount }) }.sortedByDescending { it.second },
+        topCustomers = topCustomers(now),
     )
+}
+
+/**
+ * أهم الزبائن آخر 90 يوماً: ما دفعوه أولاً، ثم انتظامهم (عدد الدفعات)، مع خصم للمتأخرين.
+ */
+fun Ledger.topCustomers(now: Long, n: Int = 5): List<Pair<CustomerBalance, Double>> {
+    val since = now - 90 * 86_400_000L
+    return customers.map { c ->
+        val h = history(c.customer.id).filter { it.at >= since }
+        val paid = h.filter { it.kind == TxKind.Payment }.sumOf { it.amount }
+        val score = paid + h.count { it.kind == TxKind.Payment } * 20.0 - (if (c.late) paid * .5 else 0.0)
+        c to score
+    }.filter { it.second > 0 }.sortedByDescending { it.second }.take(n).map { (c, _) ->
+        c to round2(history(c.customer.id).filter { it.at >= since && it.kind == TxKind.Payment }.sumOf { it.amount })
+    }
 }

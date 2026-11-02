@@ -231,6 +231,8 @@ class QaydRepo(context: Context) {
             recurringId = it.getString("recurringId"), period = it.getString("period"),
             byName = it.getString("byName").orEmpty(), pending = it.metadata.hasPendingWrites(),
             by = it.getString("by").orEmpty(), source = it.getString("source"), ref = it.getString("ref"),
+            wallet = it.getString("wallet"), payer = it.getString("payer").orEmpty(), payerPhone = it.getString("payerPhone").orEmpty(),
+            verify = it.getString("verify"),
         )
     }
 
@@ -281,17 +283,51 @@ class QaydRepo(context: Context) {
     fun addTx(
         shopId: String, kind: TxKind, amount: Double, customerId: String? = null,
         category: ExpenseCategory? = null, recurringId: String? = null,
-        source: String? = null, ref: String? = null,
-    ) {
+        source: String? = null, ref: String? = null, wallet: String? = null,
+    ): String {
         val now = System.currentTimeMillis()
-        db.collection("shops/$shopId/tx").document().set(
+        val doc = db.collection("shops/$shopId/tx").document()
+        doc.set(
             stamp() + mapOf(
                 "kind" to kind.key, "amount" to round2(amount), "at" to Timestamp(java.util.Date(now)),
                 "customerId" to customerId, "category" to category?.key,
                 "recurringId" to recurringId, "period" to if (recurringId != null) Ledger.period(now) else null,
                 "source" to source, "ref" to ref,
-            ),
+            ) + if (wallet != null) mapOf("wallet" to wallet, "verify" to "pending") else emptyMap(),
         )
+        return doc.id
+    }
+
+    /** بيانات المحوِّل اختيارية وتُضاف بعد التسجيل. */
+    fun setPayer(shopId: String, txId: String, payer: String, phone: String) {
+        db.document("shops/$shopId/tx/$txId").update(mapOf("payer" to payer.trim(), "payerPhone" to phone.trim(), "updatedAt" to FieldValue.serverTimestamp()))
+    }
+
+    fun verifyTx(shopId: String, txId: String, status: String) {
+        val a = _account.value
+        db.document("shops/$shopId/tx/$txId").update(mapOf("verify" to status, "verifiedBy" to a?.displayName, "verifiedAt" to FieldValue.serverTimestamp(), "updatedAt" to FieldValue.serverTimestamp()))
+    }
+
+    fun wallets(shopId: String): Flow<List<String>> = callbackFlow {
+        val reg = db.document("shops/$shopId/settings/payments").addSnapshotListener { s, _ ->
+            trySend((s?.get("wallets") as? List<*>)?.map { it.toString() } ?: listOf("بال باي", "جوال باي", "بنك فلسطين"))
+        }
+        awaitClose { reg.remove() }
+    }
+
+    fun saveWallets(shopId: String, list: List<String>) {
+        db.document("shops/$shopId/settings/payments").set(mapOf("wallets" to list))
+    }
+
+    fun closes(shopId: String): Flow<List<CashClose>> = listen("shops/$shopId/closes") {
+        CashClose(it.id, it.getString("byName").orEmpty(), it.getString("by").orEmpty(), it.millis("at"),
+            it.getDouble("expected") ?: 0.0, it.getDouble("actual") ?: 0.0, it.getString("note").orEmpty())
+    }
+
+    fun addClose(shopId: String, expected: Double, actual: Double, note: String) {
+        db.collection("shops/$shopId/closes").document().set(stamp() + mapOf(
+            "expected" to round2(expected), "actual" to round2(actual), "note" to note.trim(), "at" to Timestamp(java.util.Date()),
+        ))
     }
 
     fun deleteTx(shopId: String, tx: Tx, who: String?) {

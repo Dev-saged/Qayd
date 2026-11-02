@@ -83,6 +83,19 @@ fun ReportsPage(padding: PaddingValues, r: Report, onBack: () -> Unit) {
                 Line("الصافي بعد المصروفات", cur(r.net), if (r.net >= 0) p.ok else p.danger, bold = true)
                 if (r.psMonth > 0) Line("دخل الشاشات", cur(r.psMonth))
                 if (r.powerMonth > 0) Line("فواتير الكهرباء", cur(r.powerMonth))
+                if (r.monthDiscounts > 0) Line("الخصومات الممنوحة", cur(r.monthDiscounts), p.warn)
+            }
+        }
+        if (r.byWallet.size > 1 || r.byWallet.any { it.first != "نقدي" }) item {
+            Card {
+                T("الدخل حسب طريقة الدفع", size = 13.sp, color = p.mute)
+                r.byWallet.forEach { (w, v) -> Line(w, cur(v)) }
+            }
+        }
+        if (r.topCustomers.isNotEmpty()) item {
+            Card {
+                T("أهم الزبائن (آخر 90 يوماً)", size = 13.sp, color = p.mute)
+                r.topCustomers.forEach { (c, paid) -> Line(c.customer.name, "دفع ${cur(paid)}", p.ok) }
             }
         }
         if (r.topDebtors.isNotEmpty()) item {

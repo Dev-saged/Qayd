@@ -96,8 +96,11 @@ service cloud.firestore {
           (request.resource.data.kind == 'sale' && (can(shopId, 'quickSale') || can(shopId, 'managePs')))
           || (request.resource.data.kind == 'debt' && (can(shopId, 'addDebt') || can(shopId, 'recordReadings') || can(shopId, 'managePs')))
           || (request.resource.data.kind == 'payment' && can(shopId, 'addPayment'))
-          || (request.resource.data.kind == 'expense' && can(shopId, 'expenses')));
-        allow update: if can(shopId, 'deleteTx') && onlyChanges(['deleted', 'deletedBy', 'deletedByName', 'updatedAt']);
+          || (request.resource.data.kind == 'expense' && can(shopId, 'expenses'))
+          || (request.resource.data.kind == 'discount' && can(shopId, 'discount')));
+        allow update: if (can(shopId, 'deleteTx') && onlyChanges(['deleted', 'deletedBy', 'deletedByName', 'updatedAt']))
+          || (member(shopId) && resource.data.by == request.auth.uid && onlyChanges(['payer', 'payerPhone', 'updatedAt']))
+          || (can(shopId, 'confirmTransfers') && onlyChanges(['verify', 'verifiedBy', 'verifiedAt', 'updatedAt']));
       }
 
       match /recurring/{id} {
@@ -178,6 +181,11 @@ service cloud.firestore {
         allow update: if featureOn(shopId, 'layaway') && (
           (can(shopId, 'quickSale') && request.resource.data.status != 'cancelled')
           || can(shopId, 'deleteTx'));
+      }
+
+      match /closes/{id} {
+        allow read: if member(shopId);
+        allow create: if byMe() && member(shopId);
       }
 
       match /usage/{doc} {

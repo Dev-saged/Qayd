@@ -255,6 +255,8 @@ private fun ShopRoot(vm: AppViewModel, account: Account, onExit: (() -> Unit)? =
                     dev.saged.qayd.data.StatementLinks.of = if (smsSettings.link) ({ c -> vm.repo.ensureLink(shop.id, c) }) else ({ null })
                 }
             }
+            val wallets by remember(shop.id) { vm.repo.wallets(shop.id) }.collectAsStateWithLifecycle(emptyList())
+            val closes by remember(shop.id) { vm.repo.closes(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val products by remember(shop.id) { vm.repo.products(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val moves by remember(shop.id) { vm.repo.moves(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val stock = remember(products, moves) { dev.saged.qayd.data.StockState.of(products, moves) }
@@ -345,7 +347,7 @@ private fun ShopRoot(vm: AppViewModel, account: Account, onExit: (() -> Unit)? =
             val notice = broadcast?.takeIf { it.active && it.text.isNotBlank() && it.at > seenNotice }
             if (!access.active) return Blocked("حسابك موقوف من صاحب المحل", exit)
             QaydShell(shop, account, current.second, ledger, slots, actions, access, members, audit, prices, power, gateway, queue, templates, features, smsUsed, stock, suppliers, stockActions, menu, orders, orderActions, holds, holdActions,
-                smsSettings = smsSettings, gatewayRequest = gatewayRequest,
+                smsSettings = smsSettings, gatewayRequest = gatewayRequest, wallets = wallets, closes = closes,
                 notice = notice?.text, onNoticeClose = { notice?.let { prefs.edit().putLong("seen", it.at).apply(); seenNotice = it.at } },
             ) { pad, nav ->
                 MoreScreen(
@@ -404,6 +406,13 @@ private fun shopActions(
         setLimit = { c, v -> r.setLimit(shopId, c, v) },
         setWaPrefix = { c, pre -> r.setWaPrefix(shopId, c, pre) },
         saveSmsSettings = { r.saveSmsSettings(shopId, it) },
+        saleWith = { v, w -> r.addTx(shopId, TxKind.Sale, v, wallet = w) },
+        paymentWith = { c, v, w -> r.addTx(shopId, TxKind.Payment, v, customerId = c, wallet = w) },
+        discount = { c, v -> r.addTx(shopId, TxKind.Discount, v, customerId = c) },
+        setPayer = { id, n, ph -> r.setPayer(shopId, id, n, ph) },
+        verifyTx = { t, st -> r.verifyTx(shopId, t.id, st) },
+        saveWallets = { r.saveWallets(shopId, it) },
+        cashClose = { e, a, n -> r.addClose(shopId, e, a, n) },
         requestGateway = { r.requestGateway(shopId) },
         answerGateway = { r.answerGatewayRequest(shopId, it) },
         backup = { runCatching { Backup.share(ctx, Backup.write(ctx, shopId, ledger, customers, readings, templates)) } },

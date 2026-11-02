@@ -121,6 +121,8 @@ private sealed interface Page {
     data object Suppliers : Page
     data object Orders : Page
     data object Holds : Page
+    data object Transfers : Page
+    data object CashClose : Page
 }
 
 /** تنقل صفحات "المزيد". */
@@ -138,6 +140,9 @@ class MoreNav(
     val lockedModules: List<String> = emptyList(),
     val orders: (() -> Unit)? = null,
     val holds: (() -> Unit)? = null,
+    val transfers: (() -> Unit)? = null,
+    val pendingTransfers: Int = 0,
+    val cashClose: (() -> Unit)? = null,
 )
 
 @Composable
@@ -170,6 +175,8 @@ fun QaydShell(
     onNoticeClose: () -> Unit = {},
     smsSettings: dev.saged.qayd.data.SmsSettings = dev.saged.qayd.data.SmsSettings(),
     gatewayRequest: dev.saged.qayd.data.GatewayRequest? = null,
+    wallets: List<String> = emptyList(),
+    closes: List<dev.saged.qayd.data.CashClose> = emptyList(),
     more: @Composable (PaddingValues, MoreNav) -> Unit,
 ) = androidx.compose.runtime.CompositionLocalProvider(
     dev.saged.qayd.ui.components.LocalQuickAdds provides dev.saged.qayd.data.BizType.of(shop.type).quickAdds,
@@ -192,6 +199,8 @@ fun QaydShell(
     var psDebt by remember { mutableStateOf<PsSlot?>(null) }
     var pricesOpen by rememberSaveable { mutableStateOf(false) }
     var smsFor by remember { mutableStateOf<String?>(null) }
+    var payerFor by remember { mutableStateOf<Pair<String, String>?>(null) }
+    val payChips = listOf(PadChip("cash", "نقدي")) + wallets.map { PadChip(it, it) }
     var overLimit by remember { mutableStateOf<Pair<dev.saged.qayd.data.Customer, Double>?>(null) }
     val ctx = LocalContext.current
     var gatewayHere by remember { mutableStateOf(GatewayService.isOn(ctx)) }
@@ -225,6 +234,7 @@ fun QaydShell(
                                 showBalance = access.can(Perm.ViewBalances),
                                 onSms = { smsFor = c.id }.takeIf { access.can(Perm.SendSms) },
                                 onLimit = { pad = PadRequest.Limit(c) }.takeIf { access.can(Perm.ManageCustomers) },
+                                onDiscount = { pad = PadRequest.Discount(c) }.takeIf { access.can(Perm.Discount) },
                                 onPdf = {
                                     runCatching { pdf.share(pdf.statement(shop, c, ledger.history(c.id))) }
                                     Unit
@@ -238,6 +248,10 @@ fun QaydShell(
                     Page.Stock -> dev.saged.qayd.ui.stock.StockPage(
                         pad0, stock, suppliers.items.map { it.supplier }, access.can(Perm.ManageStock), access.can(Perm.QuickSale), stockActions, onBack = { page = null },
                     )
+                    Page.Transfers -> dev.saged.qayd.ui.money.TransfersPage(
+                        pad0, ledger, wallets, access.can(Perm.ConfirmTransfers), owner, actions.verifyTx, actions.saveWallets, onBack = { page = null },
+                    )
+                    Page.CashClose -> dev.saged.qayd.ui.money.CashClosePage(pad0, ledger, account.uid, closes, owner, actions.cashClose, onBack = { page = null })
                     Page.Holds -> dev.saged.qayd.ui.holds.HoldsPage(pad0, holds, stock.items, access.can(Perm.DeleteTx), holdActions, onBack = { page = null })
                     Page.Orders -> dev.saged.qayd.ui.orders.OrdersPage(
                         pad0, shop.name, menu, orders, access.can(Perm.ManageMenu), access.can(Perm.DeleteTx), orderActions, onBack = { page = null },
@@ -304,6 +318,9 @@ fun QaydShell(
                                 reportsLocked = access.can(Perm.ViewReports) && !full.unlocked("reports", features),
                                 stock = { page = Page.Stock }.takeIf { Module.Inventory in shop.modules },
                                 orders = { page = Page.Orders }.takeIf { Module.Menu in shop.modules },
+                                transfers = { page = Page.Transfers }.takeIf { access.can(Perm.ConfirmTransfers) || owner },
+                                pendingTransfers = ledger.allTx.count { it.wallet != null && it.verify == "pending" },
+                                cashClose = { page = Page.CashClose }.takeIf { access.can(Perm.QuickSale) || access.can(Perm.AddPayment) },
                                 holds = { page = Page.Holds }.takeIf { Module.Layaway in shop.modules && access.can(Perm.QuickSale) },
                                 suppliers = { page = Page.Suppliers }.takeIf { Module.Suppliers in shop.modules },
                                 lockedModules = listOf(Module.Inventory, Module.Suppliers, Module.Menu, Module.Layaway).filter { it in full.modules && it !in shop.modules }.map { it.label },
@@ -355,7 +372,14 @@ fun QaydShell(
     }
 
     when (val r = pad) {
-        PadRequest.Sale -> NumpadSheet("بيع سريع", "يُسجل كبيع للمحل مباشرة", p.ok, "سجّل البيع", onDismiss = { pad = null }) { v, _ -> actions.sale(v) }
+        PadRequest.Sale -> NumpadSheet(
+            "بيع سريع", "يُسجل كبيع للمحل مباشرة", p.ok, "سجّل البيع",
+            chips = if (wallets.isEmpty()) emptyList() else payChips, initialChip = "cash", onDismiss = { pad = null },
+        ) { v, chip ->
+            val w = chip?.takeIf { it != "cash" }
+            val id = actions.saleWith(v, w)
+            if (w != null) payerFor = id to w
+        }
         is PadRequest.Debt -> {
             val bal = ledger.balanceOf(r.customer.id)?.balance ?: 0.0
             val lim = r.customer.limit
@@ -371,8 +395,19 @@ fun QaydShell(
         ) { v, _ -> actions.setLimit(r.customer.id, v) }
         is PadRequest.Payment -> NumpadSheet(
             "دفعة من ${r.customer.name}", balanceText(ledger.balanceOf(r.customer.id)?.balance ?: 0.0, p).first,
-            p.ok, "سجّل الدفعة", onDismiss = { pad = null },
-        ) { v, _ -> actions.payment(r.customer.id, v) }
+            p.ok, "سجّل الدفعة", chips = if (wallets.isEmpty()) emptyList() else payChips, initialChip = "cash", onDismiss = { pad = null },
+        ) { v, chip ->
+            val w = chip?.takeIf { it != "cash" }
+            val id = actions.paymentWith(r.customer.id, v, w)
+            if (w != null) payerFor = id to w
+        }
+        is PadRequest.Discount -> {
+            val bal = ledger.balanceOf(r.customer.id)?.balance ?: 0.0
+            NumpadSheet(
+                "خصم لـ ${r.customer.name}", balanceText(bal, p).first, p.pri, "اعتماد الخصم", onDismiss = { pad = null },
+                preview = { v -> "الرصيد بعد الخصم ${cur(bal - v)}" to (v <= bal || bal <= 0) },
+            ) { v, _ -> if (v > 0) actions.discount(r.customer.id, v) }
+        }
         is PadRequest.Expense -> NumpadSheet(
             title = r.recurring?.item?.title ?: "مصروف",
             subtitle = r.recurring?.let { "${it.item.category.label} · دفعة هذا الشهر" },
@@ -387,6 +422,8 @@ fun QaydShell(
         ) { v, _ -> actions.setPrice(r.key, v) }
         null -> Unit
     }
+
+    payerFor?.let { (id, w) -> dev.saged.qayd.ui.money.PayerSheet(w, { n, ph -> if (n.isNotBlank() || ph.isNotBlank()) actions.setPayer(id, n, ph) }) { payerFor = null } }
 
     overLimit?.let { (c, v) ->
         dev.saged.qayd.ui.components.QSheet("تجاوز سقف الدين", { overLimit = null }) {

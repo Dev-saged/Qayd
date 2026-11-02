@@ -46,6 +46,7 @@
 ## Changes
 - v0.1.0: shell + home (direction A), icon, CI, per-build releases.
 - v0.2.0: Firebase auth + offline session, super admin panel, staff creation, shop rename, sync chip, Worker + rules.
+- v1.10.0: Tx.wallet/payer/payerPhone/verify, TxKind.Discount, settings/payments wallets, closes collection + Ledger.cashToday, ui/money (TransfersPage, PayerSheet, CashClosePage), Report byWallet/monthDiscounts/topCustomers, Perm confirmTransfers/discount.
 - v1.9.0: SmsSettings (settings/sms), StatementLinks + links/{token} + Worker GET /s/{token} HTML, Customer.limit/waPrefix/link, PadRequest.Limit + over-limit sheet, notify/SmsSchedule (exact alarms pre/run on designated device, WorkManager GatewayCheck), gateway/request flow, openWhatsApp, QaydRepo.get singleton.
 - v1.8.0: ui/components/Avatars (12 drawn looks, members.avatar), QSwitchGroup + QSheet footer, system/SavedLogins (Keystore AES-GCM), DevFooter on login, Worker cron */10 (backup one shop per run into KV bk:{shop}:{iso} ttl 7d, daily cleanup), /v1/backups/list|get|run, /v1/shops/remove; repo wipe/delete/restore as super; rules super recursive on shops.
 - v1.7.0: data/Platform (Plan, Presence, Payment, Broadcast), config/plans + config/broadcast, presence/{shopId} (written by shop app), payments (super only), Admin: plans/payment/broadcast sheets, renewals card, support mode (ShopRoot read-only with onExit), home notice banner.

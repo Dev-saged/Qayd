@@ -79,6 +79,13 @@ class ShopActions(
     val saveSmsSettings: (dev.saged.qayd.data.SmsSettings) -> Unit = {},
     val requestGateway: () -> Unit = {},
     val answerGateway: (Boolean) -> Unit = {},
+    val saleWith: (Double, String?) -> String = { _, _ -> "" },
+    val paymentWith: (String, Double, String?) -> String = { _, _, _ -> "" },
+    val discount: (String, Double) -> Unit = { _, _ -> },
+    val setPayer: (String, String, String) -> Unit = { _, _, _ -> },
+    val verifyTx: (Tx, String) -> Unit = { _, _ -> },
+    val saveWallets: (List<String>) -> Unit = {},
+    val cashClose: (Double, Double, String) -> Unit = { _, _, _ -> },
 ) {
     companion object {
         val None = ShopActions({}, { _, _ -> }, { _, _ -> }, { _, _, _ -> }, {}, { _, _ -> "" }, { _, _, _ -> }, {})
@@ -93,6 +100,7 @@ sealed interface PadRequest {
     data class Expense(val recurring: RecurringStatus? = null) : PadRequest
     data class Price(val key: String, val title: String, val current: Double) : PadRequest
     data class Limit(val customer: Customer) : PadRequest
+    data class Discount(val customer: Customer) : PadRequest
 }
 
 @Composable

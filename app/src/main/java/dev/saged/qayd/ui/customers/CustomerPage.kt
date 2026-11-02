@@ -61,6 +61,7 @@ fun CustomerPage(
     onSms: (() -> Unit)? = null,
     onPdf: (() -> Unit)? = null,
     onLimit: (() -> Unit)? = null,
+    onDiscount: (() -> Unit)? = null,
 ) {
     val p = LocalPalette.current
     val ctx = LocalContext.current
@@ -102,7 +103,8 @@ fun CustomerPage(
                 T(when { b > 0 -> "الرصيد المستحق عليه"; b < 0 -> "رصيد مقدم له"; else -> "الحساب مسدّد" }, size = 13.sp, color = p.mute)
                 T(cur(kotlin.math.abs(b)), size = 36.sp, weight = FontWeight.SemiBold, color = c)
                 T(
-                    "مجموع الديون ${cur(history.filter { it.kind == TxKind.Debt }.sumOf { it.amount })} · الدفعات ${cur(history.filter { it.kind == TxKind.Payment }.sumOf { it.amount })}",
+                    "مجموع الديون ${cur(history.filter { it.kind == TxKind.Debt }.sumOf { it.amount })} · الدفعات ${cur(history.filter { it.kind == TxKind.Payment }.sumOf { it.amount })}" +
+                        history.filter { it.kind == TxKind.Discount }.sumOf { it.amount }.takeIf { it > 0 }?.let { " · الخصومات ${cur(it)}" }.orEmpty(),
                     size = 12.sp, color = p.mute, maxLines = 2,
                 )
                 if (customer.limit > 0 || onLimit != null) {
@@ -122,6 +124,9 @@ fun CustomerPage(
                 if (onPayment != null) QButton("دفعة", onPayment, Modifier.weight(1f), secondary = true)
                 if (onSms != null && customer.phone.isNotBlank()) QButton("رسالة", onSms, Modifier.weight(1f), secondary = true)
             }
+        }
+        if (onDiscount != null && b > 0) item {
+            T("منح خصم من الرصيد", Modifier.clip(RoundedCornerShape(10.dp)).clickable(role = Role.Button, onClick = onDiscount).padding(8.dp), 13.sp, FontWeight.Medium, p.pri)
         }
         item { T("السجل", Modifier.entrance(3).padding(top = 6.dp), 14.5.sp, FontWeight.SemiBold) }
         if (history.isEmpty()) item { T("لا حركات بعد.", Modifier.padding(vertical = 12.dp), 13.sp, color = p.mute) }
