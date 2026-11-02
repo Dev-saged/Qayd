@@ -46,6 +46,7 @@
 ## Changes
 - v0.1.0: shell + home (direction A), icon, CI, per-build releases.
 - v0.2.0: Firebase auth + offline session, super admin panel, staff creation, shop rename, sync chip, Worker + rules.
+- v1.6.0: Product.sizes/colors → variants, Move.variant, ProductStock.byVariant, returnProduct (negative sale + return move), data/Holds + ui/holds (deposits, pays array, deliver moves stock), Module.Layaway, rules holds.
 - v1.5.0: data/Orders (menu, orders with daily no, sale tx in same batch), ui/orders (OrdersPage, NewOrder grid, MenuView, PrintSheet), system/BtPrinter (ESC/POS raster over SPP, 58/80mm), Module.Menu + Perm manageMenu, rules menu/orders.
 - v1.4.0: data/Business (BizType presets + LocalQuickAdds), data/Stock (products + moves, derived qty), data/Suppliers (suppliers + stx), ui/stock (StockPage, scanner via zxing-android-embedded), ui/suppliers, Perm manageStock/manageSuppliers, rules products/moves/suppliers/stx, Worker MODULES+type.
 - v1.3.1: PermissionsScreen drawn as overlay in AppRoot (keeps navigation state, BackHandler), status-bar scrim (windowInsetsTopHeight statusBars).

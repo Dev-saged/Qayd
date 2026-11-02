@@ -216,6 +216,17 @@ private fun ShopRoot(vm: AppViewModel, account: Account) {
                     }) else null,
                 )
             }
+            val holds by remember(shop.id) { vm.repo.holds(shop.id) }.collectAsStateWithLifecycle(emptyList())
+            val holdActions = remember(shop.id, products) {
+                val r = vm.repo
+                val id = shop.id
+                dev.saged.qayd.ui.holds.HoldActions(
+                    add = { n, ph, t, pid, v, total, dep -> r.addHold(id, n, ph, t, pid, v, total, dep) },
+                    pay = { h, a -> r.payHold(id, h, a) },
+                    deliver = { h -> r.deliverHold(id, h, products.firstOrNull { it.id == h.productId }?.cost ?: 0.0) },
+                    cancel = { h -> r.cancelHold(id, h) },
+                )
+            }
             val stockActions = remember(shop.id) {
                 val r = vm.repo
                 val id = shop.id
@@ -223,9 +234,10 @@ private fun ShopRoot(vm: AppViewModel, account: Account) {
                     addProduct = { r.addProduct(id, it) },
                     editProduct = { r.editProduct(id, it) },
                     deleteProduct = { r.deleteProduct(id, it) },
-                    sell = { pr, q -> r.sellProduct(id, pr, q) },
-                    receive = { pr, q, c, s -> r.receiveStock(id, pr, q, c, s) },
-                    adjust = { pr, cur, act -> r.adjustStock(id, pr, cur, act) },
+                    sell = { pr, q, v -> r.sellProduct(id, pr, q, v) },
+                    receive = { pr, q, c, s, v -> r.receiveStock(id, pr, q, c, s, v) },
+                    adjust = { pr, cur, act, v -> r.adjustStock(id, pr, cur, act, v) },
+                    returnItem = { pr, q, v -> r.returnProduct(id, pr, q, v) },
                     addSupplier = { n, ph -> r.addSupplier(id, n, ph) },
                     supplierTx = { s, k, v, note -> r.addSupplierTx(id, s, k, v, note) },
                 )
@@ -248,7 +260,7 @@ private fun ShopRoot(vm: AppViewModel, account: Account) {
             val me = members.firstOrNull { it.uid == account.uid }
             val access = if (account.role == Role.Owner) Access.Full else Access(Role.Staff, me?.perms.orEmpty(), me?.active ?: true)
             if (!access.active) return Blocked("حسابك موقوف من صاحب المحل", vm::signOut)
-            QaydShell(shop, account, current.second, ledger, slots, actions, access, members, audit, prices, power, gateway, queue, templates, features, smsUsed, stock, suppliers, stockActions, menu, orders, orderActions) { pad, nav ->
+            QaydShell(shop, account, current.second, ledger, slots, actions, access, members, audit, prices, power, gateway, queue, templates, features, smsUsed, stock, suppliers, stockActions, menu, orders, orderActions, holds, holdActions) { pad, nav ->
                 MoreScreen(
                     padding = pad, shop = shop, account = account, sync = current.second, op = op,
                     onRename = { vm.repo.renameShop(shop.id, it) },

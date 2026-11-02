@@ -148,6 +148,14 @@ service cloud.firestore {
           || (can(shopId, 'deleteTx') && onlyChanges(['status', 'updatedAt']));
       }
 
+      match /holds/{id} {
+        allow read: if member(shopId);
+        allow create: if byMe() && can(shopId, 'quickSale') && featureOn(shopId, 'layaway');
+        allow update: if featureOn(shopId, 'layaway') && (
+          (can(shopId, 'quickSale') && request.resource.data.status != 'cancelled')
+          || can(shopId, 'deleteTx'));
+      }
+
       match /usage/{doc} {
         allow read: if member(shopId);
         allow create, update: if can(shopId, 'sendSms') && featureOn(shopId, 'sms')

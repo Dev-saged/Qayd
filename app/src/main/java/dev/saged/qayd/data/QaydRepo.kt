@@ -515,31 +515,33 @@ class QaydRepo(context: Context) {
         Product(
             it.id, it.getString("name").orEmpty(), it.getString("barcode").orEmpty(), it.getString("unit") ?: "قطعة",
             it.getDouble("cost") ?: 0.0, it.getDouble("price") ?: 0.0, it.getDouble("minStock") ?: 0.0,
+            (it.get("sizes") as? List<*>).orEmpty().map(Any?::toString), (it.get("colors") as? List<*>).orEmpty().map(Any?::toString),
         )
     }
 
     fun moves(shopId: String): Flow<List<Move>> = listen("shops/$shopId/moves") {
         val kind = MoveKind.of(it.getString("kind")) ?: return@listen null
-        Move(it.id, it.getString("productId").orEmpty(), kind, it.getDouble("qty") ?: 0.0, it.getDouble("cost") ?: 0.0, it.millis("at"), it.getString("byName").orEmpty())
+        Move(it.id, it.getString("productId").orEmpty(), kind, it.getDouble("qty") ?: 0.0, it.getDouble("cost") ?: 0.0, it.millis("at"), it.getString("byName").orEmpty(), it.getString("variant").orEmpty())
     }
 
-    private fun move(shopId: String, productId: String, kind: MoveKind, qty: Double, cost: Double, extra: Map<String, Any?> = emptyMap()) =
+    private fun move(shopId: String, productId: String, kind: MoveKind, qty: Double, cost: Double, extra: Map<String, Any?> = emptyMap(), variant: String = "") =
         db.collection("shops/$shopId/moves").document() to stamp() + mapOf(
-            "productId" to productId, "kind" to kind.key, "qty" to round2(qty), "cost" to round2(cost),
+            "productId" to productId, "kind" to kind.key, "qty" to round2(qty), "cost" to round2(cost), "variant" to variant,
             "at" to Timestamp(java.util.Date()),
         ) + extra
 
     fun addProduct(shopId: String, n: NewProduct) {
         val batch = db.batch()
         val ref = db.collection("shops/$shopId/products").document()
-        batch.set(ref, stamp() + mapOf("name" to n.name.trim(), "barcode" to n.barcode.trim(), "unit" to n.unit, "cost" to round2(n.cost), "price" to round2(n.price), "minStock" to n.minStock))
+        batch.set(ref, stamp() + mapOf("name" to n.name.trim(), "barcode" to n.barcode.trim(), "unit" to n.unit, "cost" to round2(n.cost), "price" to round2(n.price), "minStock" to n.minStock, "sizes" to n.sizes, "colors" to n.colors))
         if (n.qty > 0) move(shopId, ref.id, MoveKind.In, n.qty, n.cost).let { (d, m) -> batch.set(d, m) }
         batch.commit()
     }
 
     fun editProduct(shopId: String, p: Product) {
         db.document("shops/$shopId/products/${p.id}").update(
-            mapOf("name" to p.name.trim(), "barcode" to p.barcode.trim(), "unit" to p.unit, "cost" to round2(p.cost), "price" to round2(p.price), "minStock" to p.minStock, "updatedAt" to FieldValue.serverTimestamp()),
+            mapOf("name" to p.name.trim(), "barcode" to p.barcode.trim(), "unit" to p.unit, "cost" to round2(p.cost), "price" to round2(p.price), "minStock" to p.minStock,
+                "sizes" to p.sizes, "colors" to p.colors, "updatedAt" to FieldValue.serverTimestamp()),
         )
     }
 
@@ -549,21 +551,21 @@ class QaydRepo(context: Context) {
     }
 
     /** بيع صنف: حركة بيع في الدفتر وخروج من المخزون بعملية واحدة. */
-    fun sellProduct(shopId: String, p: Product, qty: Double) {
+    fun sellProduct(shopId: String, p: Product, qty: Double, variant: String = "") {
         val batch = db.batch()
         val tx = db.collection("shops/$shopId/tx").document()
         batch.set(tx, stamp() + mapOf(
             "kind" to TxKind.Sale.key, "amount" to round2(qty * p.price), "at" to Timestamp(java.util.Date()),
-            "source" to "stock", "ref" to "${p.name} × ${dev.saged.qayd.ui.util.money(qty)}",
+            "source" to "stock", "ref" to "${p.name}${if (variant.isNotBlank()) " ($variant)" else ""} × ${dev.saged.qayd.ui.util.money(qty)}",
         ))
-        move(shopId, p.id, MoveKind.Sale, -qty, p.cost, mapOf("txId" to tx.id)).let { (d, m) -> batch.set(d, m) }
+        move(shopId, p.id, MoveKind.Sale, -qty, p.cost, mapOf("txId" to tx.id), variant).let { (d, m) -> batch.set(d, m) }
         batch.commit()
     }
 
     /** إدخال بضاعة، ومعها فاتورة شراء على المورد إن اختير. */
-    fun receiveStock(shopId: String, p: Product, qty: Double, cost: Double, supplierId: String?) {
+    fun receiveStock(shopId: String, p: Product, qty: Double, cost: Double, supplierId: String?, variant: String = "") {
         val batch = db.batch()
-        move(shopId, p.id, MoveKind.In, qty, cost, mapOf("supplierId" to supplierId)).let { (d, m) -> batch.set(d, m) }
+        move(shopId, p.id, MoveKind.In, qty, cost, mapOf("supplierId" to supplierId), variant).let { (d, m) -> batch.set(d, m) }
         if (cost != p.cost && cost > 0) batch.update(db.document("shops/$shopId/products/${p.id}"), mapOf("cost" to round2(cost), "updatedAt" to FieldValue.serverTimestamp()))
         if (supplierId != null && qty * cost > 0) {
             batch.set(db.collection("shops/$shopId/stx").document(), stamp() + mapOf(
@@ -574,9 +576,9 @@ class QaydRepo(context: Context) {
         batch.commit()
     }
 
-    fun adjustStock(shopId: String, p: Product, current: Double, actual: Double) {
+    fun adjustStock(shopId: String, p: Product, current: Double, actual: Double, variant: String = "") {
         if (actual == current) return
-        move(shopId, p.id, MoveKind.Adjust, actual - current, p.cost).let { (d, m) -> d.set(m) }
+        move(shopId, p.id, MoveKind.Adjust, actual - current, p.cost, variant = variant).let { (d, m) -> d.set(m) }
         log(shopId, "جرد صنف", "${p.name}: ${dev.saged.qayd.ui.util.money(current)} ← ${dev.saged.qayd.ui.util.money(actual)}", null)
     }
 
@@ -658,5 +660,70 @@ class QaydRepo(context: Context) {
 
     fun setOrderStatus(shopId: String, id: String, status: OrderStatus) {
         db.document("shops/$shopId/orders/$id").update(mapOf("status" to status.key, "updatedAt" to FieldValue.serverTimestamp()))
+    }
+
+    /** مرتجع: يعود الصنف للمخزون ويُخصم ثمنه من مبيعات اليوم. */
+    fun returnProduct(shopId: String, p: Product, qty: Double, variant: String) {
+        val batch = db.batch()
+        val tx = db.collection("shops/$shopId/tx").document()
+        batch.set(tx, stamp() + mapOf(
+            "kind" to TxKind.Sale.key, "amount" to -round2(qty * p.price), "at" to Timestamp(java.util.Date()),
+            "source" to "return", "ref" to "مرتجع ${p.name}${if (variant.isNotBlank()) " ($variant)" else ""} × ${dev.saged.qayd.ui.util.money(qty)}",
+        ))
+        move(shopId, p.id, MoveKind.Return, qty, p.cost, mapOf("txId" to tx.id), variant).let { (d, m) -> batch.set(d, m) }
+        batch.commit()
+    }
+
+    /* ---------- العربون والحجز ---------- */
+
+    fun holds(shopId: String): Flow<List<Hold>> = listen("shops/$shopId/holds") {
+        Hold(
+            it.id, it.getString("name").orEmpty(), it.getString("phone").orEmpty(), it.getString("title").orEmpty(),
+            it.getString("productId"), it.getString("variant").orEmpty(), it.getDouble("total") ?: 0.0,
+            (it.get("pays") as? List<*>).orEmpty().mapNotNull { x -> (x as? Map<*, *>)?.let { m -> ((m["amount"] as? Number)?.toDouble() ?: 0.0) to ((m["at"] as? Number)?.toLong() ?: 0L) } },
+            HoldStatus.of(it.getString("status")), it.millis("createdAt"),
+        )
+    }
+
+    private fun holdPay(batch: com.google.firebase.firestore.WriteBatch, shopId: String, title: String, amount: Double) =
+        batch.set(db.collection("shops/$shopId/tx").document(), stamp() + mapOf(
+            "kind" to TxKind.Sale.key, "amount" to round2(amount), "at" to Timestamp(java.util.Date()), "source" to "hold", "ref" to "عربون: $title",
+        ))
+
+    fun addHold(shopId: String, name: String, phone: String, title: String, productId: String?, variant: String, total: Double, deposit: Double) {
+        val batch = db.batch()
+        batch.set(db.collection("shops/$shopId/holds").document(), stamp() + mapOf(
+            "name" to name.trim(), "phone" to phone.trim(), "title" to title.trim(), "productId" to productId, "variant" to variant,
+            "total" to round2(total), "status" to HoldStatus.Open.key,
+            "pays" to if (deposit > 0) listOf(mapOf("amount" to round2(deposit), "at" to System.currentTimeMillis())) else emptyList(),
+        ))
+        if (deposit > 0) holdPay(batch, shopId, title, deposit)
+        batch.commit()
+    }
+
+    fun payHold(shopId: String, h: Hold, amount: Double) {
+        val batch = db.batch()
+        batch.update(db.document("shops/$shopId/holds/${h.id}"), mapOf(
+            "pays" to FieldValue.arrayUnion(mapOf("amount" to round2(amount), "at" to System.currentTimeMillis())), "updatedAt" to FieldValue.serverTimestamp(),
+        ))
+        holdPay(batch, shopId, h.title, amount)
+        batch.commit()
+    }
+
+    /** التسليم: يُدفع الباقي إن وُجد، ويخرج الصنف من المخزون. */
+    fun deliverHold(shopId: String, h: Hold, cost: Double) {
+        val batch = db.batch()
+        if (h.left > 0) {
+            batch.update(db.document("shops/$shopId/holds/${h.id}"), mapOf("pays" to FieldValue.arrayUnion(mapOf("amount" to h.left, "at" to System.currentTimeMillis()))))
+            holdPay(batch, shopId, h.title, h.left)
+        }
+        batch.update(db.document("shops/$shopId/holds/${h.id}"), mapOf("status" to HoldStatus.Done.key, "updatedAt" to FieldValue.serverTimestamp()))
+        h.productId?.let { pid -> move(shopId, pid, MoveKind.Sale, -1.0, cost, mapOf("holdId" to h.id), h.variant).let { (d, m) -> batch.set(d, m) } }
+        batch.commit()
+    }
+
+    fun cancelHold(shopId: String, h: Hold) {
+        db.document("shops/$shopId/holds/${h.id}").update(mapOf("status" to HoldStatus.Cancelled.key, "updatedAt" to FieldValue.serverTimestamp()))
+        log(shopId, "إلغاء حجز", "${h.title} · ${h.name}", h.paid)
     }
 }

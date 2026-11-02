@@ -9,9 +9,10 @@ class StockActions(
     val addProduct: (NewProduct) -> Unit = {},
     val editProduct: (Product) -> Unit = {},
     val deleteProduct: (Product) -> Unit = {},
-    val sell: (Product, Double) -> Unit = { _, _ -> },
-    val receive: (Product, Double, Double, String?) -> Unit = { _, _, _, _ -> },
-    val adjust: (Product, Double, Double) -> Unit = { _, _, _ -> },
+    val sell: (Product, Double, String) -> Unit = { _, _, _ -> },
+    val receive: (Product, Double, Double, String?, String) -> Unit = { _, _, _, _, _ -> },
+    val adjust: (Product, Double, Double, String) -> Unit = { _, _, _, _ -> },
+    val returnItem: (Product, Double, String) -> Unit = { _, _, _ -> },
     val addSupplier: (String, String) -> String = { _, _ -> "" },
     val supplierTx: (String, STxKind, Double, String) -> Unit = { _, _, _, _ -> },
 ) {

@@ -120,6 +120,7 @@ private sealed interface Page {
     data object Stock : Page
     data object Suppliers : Page
     data object Orders : Page
+    data object Holds : Page
 }
 
 /** تنقل صفحات "المزيد". */
@@ -136,6 +137,7 @@ class MoreNav(
     val suppliers: (() -> Unit)? = null,
     val lockedModules: List<String> = emptyList(),
     val orders: (() -> Unit)? = null,
+    val holds: (() -> Unit)? = null,
 )
 
 @Composable
@@ -162,6 +164,8 @@ fun QaydShell(
     menu: List<dev.saged.qayd.data.MenuItem> = emptyList(),
     orders: List<dev.saged.qayd.data.Order> = emptyList(),
     orderActions: dev.saged.qayd.ui.orders.OrderActions = dev.saged.qayd.ui.orders.OrderActions.None,
+    holds: List<dev.saged.qayd.data.Hold> = emptyList(),
+    holdActions: dev.saged.qayd.ui.holds.HoldActions = dev.saged.qayd.ui.holds.HoldActions.None,
     more: @Composable (PaddingValues, MoreNav) -> Unit,
 ) = androidx.compose.runtime.CompositionLocalProvider(
     dev.saged.qayd.ui.components.LocalQuickAdds provides dev.saged.qayd.data.BizType.of(shop.type).quickAdds,
@@ -228,6 +232,7 @@ fun QaydShell(
                     Page.Stock -> dev.saged.qayd.ui.stock.StockPage(
                         pad0, stock, suppliers.items.map { it.supplier }, access.can(Perm.ManageStock), access.can(Perm.QuickSale), stockActions, onBack = { page = null },
                     )
+                    Page.Holds -> dev.saged.qayd.ui.holds.HoldsPage(pad0, holds, stock.items, access.can(Perm.DeleteTx), holdActions, onBack = { page = null })
                     Page.Orders -> dev.saged.qayd.ui.orders.OrdersPage(
                         pad0, shop.name, menu, orders, access.can(Perm.ManageMenu), access.can(Perm.DeleteTx), orderActions, onBack = { page = null },
                     )
@@ -290,8 +295,9 @@ fun QaydShell(
                                 reportsLocked = access.can(Perm.ViewReports) && !full.unlocked("reports", features),
                                 stock = { page = Page.Stock }.takeIf { Module.Inventory in shop.modules },
                                 orders = { page = Page.Orders }.takeIf { Module.Menu in shop.modules },
+                                holds = { page = Page.Holds }.takeIf { Module.Layaway in shop.modules && access.can(Perm.QuickSale) },
                                 suppliers = { page = Page.Suppliers }.takeIf { Module.Suppliers in shop.modules },
-                                lockedModules = listOf(Module.Inventory, Module.Suppliers, Module.Menu).filter { it in full.modules && it !in shop.modules }.map { it.label },
+                                lockedModules = listOf(Module.Inventory, Module.Suppliers, Module.Menu, Module.Layaway).filter { it in full.modules && it !in shop.modules }.map { it.label },
                                 prices = { pricesOpen = true }.takeIf {
                                     access.can(Perm.SetPrices) && (Module.Ps in shop.modules || Module.Electricity in shop.modules)
                                 },

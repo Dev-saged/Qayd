@@ -4,7 +4,7 @@
 const SECURETOKEN_JWKS = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
 const SUFFIX_RE = /^[a-z0-9-]{2,30}\.[a-z]{2,10}$/;
 const USER_RE = /^[a-z0-9][a-z0-9._-]{1,31}$/;
-const MODULES = ['debts', 'ps', 'electricity', 'sms', 'inventory', 'suppliers', 'menu'];
+const MODULES = ['debts', 'ps', 'electricity', 'sms', 'inventory', 'suppliers', 'menu', 'layaway'];
 const TYPES = ['general', 'grocery', 'clothing', 'food', 'household', 'games'];
 const STAFF_PERMS = {
   quickSale: true, addDebt: true, addPayment: true, manageCustomers: true, deleteTx: false,

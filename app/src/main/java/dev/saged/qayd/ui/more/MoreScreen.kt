@@ -99,6 +99,7 @@ fun MoreScreen(
         Column(Modifier.entrance(2).fillMaxWidth().clip(shape).background(p.surface).border(1.dp, p.line, shape).padding(6.dp)) {
             nav.reports?.let { ActionRow(QIcons.Chart, "التقارير", "مبيعات الأسبوع، صافي الشهر، أكبر المدينين، وأداء الفريق", onClick = it) }
             nav.orders?.let { ActionRow(QIcons.Bowl, "الطلبات وقائمة الطعام", "طلب جديد، حالة الطلبات، الطباعة، وأصناف القائمة", onClick = it) }
+            nav.holds?.let { ActionRow(QIcons.Calendar, "العربون والحجز", "زبون يحجز بعربون ويستلم عند الإكمال", onClick = it) }
             nav.stock?.let { ActionRow(QIcons.Box, "الأصناف والمخزون", "الأسعار والكميات، الباركود، وتنبيه النفاد", onClick = it) }
             nav.suppliers?.let { ActionRow(QIcons.Truck, "الموردون", "ما علينا لكل تاجر، فواتير الشراء والدفعات", onClick = it) }
             nav.lockedModules.forEach { m -> ActionRow(QIcons.Box, m, "ميزة مدفوعة لمحلك", locked = true) { paidFeature = m } }

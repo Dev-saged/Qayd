@@ -59,9 +59,16 @@ import dev.saged.qayd.ui.util.norm
 private val UNITS = listOf("قطعة", "كغ", "علبة", "كرتونة", "متر", "لتر")
 
 private sealed interface Op {
-    data class Sell(val s: ProductStock) : Op
-    data class Receive(val s: ProductStock) : Op
-    data class Count(val s: ProductStock) : Op
+    val s: ProductStock
+    data class Sell(override val s: ProductStock, val v: String = "") : Op
+    data class Receive(override val s: ProductStock, val v: String = "") : Op
+    data class Count(override val s: ProductStock, val v: String = "") : Op
+    data class Return(override val s: ProductStock, val v: String = "") : Op
+}
+
+/** يطلب اختيار المقاس/اللون أولاً إن كان للصنف تنويعات. */
+private fun Op.with(v: String): Op = when (this) {
+    is Op.Sell -> copy(v = v); is Op.Receive -> copy(v = v); is Op.Count -> copy(v = v); is Op.Return -> copy(v = v)
 }
 
 /** رمز الباركود بكاميرا الجوال. */
@@ -91,6 +98,8 @@ fun StockPage(
     var editing by remember { mutableStateOf<Product?>(null) }
     var adding by remember { mutableStateOf<String?>(null) }
     var op by remember { mutableStateOf<Op?>(null) }
+    var pick by remember { mutableStateOf<Op?>(null) }
+    fun start(o: Op) { if (o.s.product.variants.isEmpty()) op = o else pick = o }
     val scan = rememberScanner { code -> stock.byBarcode(code)?.let { open = it.product.id } ?: run { if (canManage) adding = code } }
     val list = stock.items.filter { (!lowOnly || it.low) && (q.isBlank() || norm(it.product.name).contains(norm(q)) || it.product.barcode.contains(q)) }
 
@@ -128,33 +137,69 @@ fun StockPage(
         val s = stock.of(id)
         if (s == null) open = null else ProductSheet(
             s, stock, canManage, canSell,
-            onSell = { op = Op.Sell(s); open = null }, onReceive = { op = Op.Receive(s); open = null }, onCount = { op = Op.Count(s); open = null },
+            onSell = { start(Op.Sell(s)); open = null }, onReceive = { start(Op.Receive(s)); open = null }, onCount = { start(Op.Count(s)); open = null },
+            onReturn = { start(Op.Return(s)); open = null },
             onEdit = { editing = s.product; open = null }, onDelete = { actions.deleteProduct(s.product); open = null },
         ) { open = null }
     }
     adding?.let { code -> ProductForm(null, code, { actions.addProduct(it); adding = null }, { _ -> }) { adding = null } }
     editing?.let { pr -> ProductForm(pr, pr.barcode, { }, { actions.editProduct(it); editing = null }) { editing = null } }
 
+    pick?.let { o -> VariantSheet(o.s, { v -> op = o.with(v); pick = null }) { pick = null } }
+
     when (val o = op) {
-        is Op.Sell -> NumpadSheet(
-            "بيع ${o.s.product.name}", "المتوفر ${money(o.s.qty)} ${o.s.product.unit} · السعر ${cur(o.s.product.price)}", p.ok, "سجّل البيع",
-            label = "الكمية", unit = o.s.product.unit,
-            preview = { v -> "الإجمالي ${cur(v * o.s.product.price)}" to (v <= o.s.qty) },
-            onDismiss = { op = null },
-        ) { v, _ -> if (v > 0) actions.sell(o.s.product, v); op = null }
+        is Op.Sell -> {
+            val have = o.s.qtyOf(o.v)
+            NumpadSheet(
+                "بيع ${o.s.product.name}${tag(o.v)}", "المتوفر ${money(have)} ${o.s.product.unit} · السعر ${cur(o.s.product.price)}", p.ok, "سجّل البيع",
+                label = "الكمية", unit = o.s.product.unit,
+                preview = { v -> "الإجمالي ${cur(v * o.s.product.price)}" to (v <= have) },
+                onDismiss = { op = null },
+            ) { v, _ -> if (v > 0) actions.sell(o.s.product, v, o.v); op = null }
+        }
         is Op.Receive -> NumpadSheet(
-            "إدخال بضاعة: ${o.s.product.name}", "سعر الشراء ${cur(o.s.product.cost)} للـ${o.s.product.unit}", p.pri, "إدخال",
+            "إدخال بضاعة: ${o.s.product.name}${tag(o.v)}", "سعر الشراء ${cur(o.s.product.cost)} للـ${o.s.product.unit}", p.pri, "إدخال",
             chips = suppliers.map { PadChip(it.id, it.name) }, label = "الكمية", unit = o.s.product.unit,
             preview = { v -> "التكلفة ${cur(v * o.s.product.cost)}${if (suppliers.isNotEmpty()) " · اختر المورد لتُسجَّل عليه" else ""}" to true },
             onDismiss = { op = null },
-        ) { v, sup -> if (v > 0) actions.receive(o.s.product, v, o.s.product.cost, sup); op = null }
-        is Op.Count -> NumpadSheet(
-            "جرد ${o.s.product.name}", "المسجّل حالياً ${money(o.s.qty)} ${o.s.product.unit}", p.warn, "اعتماد الجرد",
-            initial = "", label = "العدد الفعلي", unit = o.s.product.unit,
-            preview = { v -> "الفرق ${ltr(money(v - o.s.qty))} ${o.s.product.unit}" to true },
+        ) { v, sup -> if (v > 0) actions.receive(o.s.product, v, o.s.product.cost, sup, o.v); op = null }
+        is Op.Count -> {
+            val have = o.s.qtyOf(o.v)
+            NumpadSheet(
+                "جرد ${o.s.product.name}${tag(o.v)}", "المسجّل حالياً ${money(have)} ${o.s.product.unit}", p.warn, "اعتماد الجرد",
+                initial = "", label = "العدد الفعلي", unit = o.s.product.unit,
+                preview = { v -> "الفرق ${ltr(money(v - have))} ${o.s.product.unit}" to true },
+                onDismiss = { op = null },
+            ) { v, _ -> actions.adjust(o.s.product, have, v, o.v); op = null }
+        }
+        is Op.Return -> NumpadSheet(
+            "مرتجع ${o.s.product.name}${tag(o.v)}", "يعود للمخزون ويُخصم ثمنه من مبيعات اليوم", p.danger, "اعتماد المرتجع",
+            label = "الكمية", unit = o.s.product.unit,
+            preview = { v -> "يُرَدّ للزبون ${cur(v * o.s.product.price)}" to true },
             onDismiss = { op = null },
-        ) { v, _ -> actions.adjust(o.s.product, o.s.qty, v); op = null }
+        ) { v, _ -> if (v > 0) actions.returnItem(o.s.product, v, o.v); op = null }
         null -> Unit
+    }
+}
+
+private fun tag(v: String) = if (v.isBlank()) "" else " ($v)"
+
+@Composable
+private fun VariantSheet(s: ProductStock, onPick: (String) -> Unit, onDismiss: () -> Unit) {
+    val p = LocalPalette.current
+    QSheet("اختر المقاس واللون", onDismiss) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            s.product.variants.forEach { v ->
+                val n = s.qtyOf(v)
+                Column(
+                    Modifier.clip(RoundedCornerShape(14.dp)).background(p.surface2).border(1.dp, if (n > 0) p.line else p.danger.copy(alpha = .3f), RoundedCornerShape(14.dp))
+                        .clickable(role = Role.Button) { onPick(v) }.padding(horizontal = 14.dp, vertical = 10.dp),
+                ) {
+                    T(v, size = 14.sp, weight = FontWeight.SemiBold)
+                    T("${money(n)} ${s.product.unit}", Modifier.padding(top = 2.dp), 12.sp, color = if (n > 0) p.mute else p.danger)
+                }
+            }
+        }
     }
 }
 
@@ -179,7 +224,7 @@ private fun ProductRow(s: ProductStock, onClick: () -> Unit) {
         }
         Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
             T(s.product.name, size = 14.5.sp, weight = FontWeight.Medium)
-            T("${cur(s.product.price)} · ربح ${cur(s.product.price - s.product.cost)}", Modifier.padding(top = 3.dp), 12.sp, color = p.mute)
+            T("${cur(s.product.price)} · ربح ${cur(s.product.price - s.product.cost)}${if (s.product.variants.isNotEmpty()) " · ${s.product.variants.size} تنويعة" else ""}", Modifier.padding(top = 3.dp), 12.sp, color = p.mute)
         }
         Column(horizontalAlignment = Alignment.End) {
             T("${money(s.qty)} ${s.product.unit}", size = 14.sp, weight = FontWeight.SemiBold, color = if (s.low) p.warn else p.ink)
@@ -191,7 +236,8 @@ private fun ProductRow(s: ProductStock, onClick: () -> Unit) {
 @Composable
 private fun ProductSheet(
     s: ProductStock, stock: StockState, canManage: Boolean, canSell: Boolean,
-    onSell: () -> Unit, onReceive: () -> Unit, onCount: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit,
+    onSell: () -> Unit, onReceive: () -> Unit, onCount: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit,
+    onReturn: () -> Unit, onDismiss: () -> Unit,
 ) {
     val p = LocalPalette.current
     var confirmDelete by remember { mutableStateOf(false) }
@@ -202,11 +248,22 @@ private fun ProductSheet(
             Stat("سعر الشراء", cur(s.product.cost), Modifier.weight(1f))
         }
         if (s.product.barcode.isNotBlank()) T("الباركود ${ltr(s.product.barcode)}", Modifier.padding(top = 10.dp), 12.sp, color = p.mute)
+        if (s.product.variants.isNotEmpty()) {
+            T("حسب المقاس واللون", Modifier.padding(top = 10.dp, bottom = 6.dp), 13.sp, FontWeight.SemiBold)
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                s.product.variants.forEach { v ->
+                    val n = s.qtyOf(v)
+                    T("$v: ${money(n)}", Modifier.clip(RoundedCornerShape(10.dp)).background(if (n > 0) p.surface2 else p.danger.copy(alpha = .12f)).padding(horizontal = 10.dp, vertical = 5.dp),
+                        12.sp, color = if (n > 0) p.ink else p.danger)
+                }
+            }
+        }
         Spacer(Modifier.height(10.dp))
         if (canSell) ActionRow(QIcons.Cart, "بيع", "يُسجَّل في مبيعات اليوم ويُخصم من المخزون", onClick = onSell)
         if (canManage) {
             ActionRow(QIcons.Down, "إدخال بضاعة", "زيادة الكمية، مع فاتورة شراء على المورد إن اخترته", onClick = onReceive)
             ActionRow(QIcons.Receipt, "جرد", "اكتب العدد الفعلي على الرف", onClick = onCount)
+            ActionRow(QIcons.Up, "مرتجع", "زبون أرجع الصنف: يعود للمخزون ويُرَدّ ثمنه", onClick = onReturn)
             ActionRow(QIcons.Edit, "تعديل الصنف", "الاسم، الأسعار، الباركود، حد التنبيه", onClick = onEdit)
             ActionRow(QIcons.Trash, "حذف الصنف", danger = true) { confirmDelete = true }
         }
@@ -239,7 +296,10 @@ private fun ProductForm(edit: Product?, code: String, onAdd: (NewProduct) -> Uni
     var price by rememberSaveable { mutableStateOf(edit?.price?.let(::money).orEmpty()) }
     var min by rememberSaveable { mutableStateOf(edit?.minStock?.takeIf { it > 0 }?.let(::money).orEmpty()) }
     var qty by rememberSaveable { mutableStateOf("") }
+    var sizes by rememberSaveable { mutableStateOf(edit?.sizes.orEmpty().joinToString("، ")) }
+    var colors by rememberSaveable { mutableStateOf(edit?.colors.orEmpty().joinToString("، ")) }
     var tried by rememberSaveable { mutableStateOf(false) }
+    fun list(s: String) = s.split(',', '،').map { it.trim() }.filter { it.isNotBlank() }.distinct()
     val scan = rememberScanner { barcode = it }
     fun d(s: String) = s.replace(',', '.').toDoubleOrNull() ?: 0.0
     fun num(s: String) = s.filter { it.isDigit() || it == '.' || it == ',' }.take(9)
@@ -262,15 +322,18 @@ private fun ProductForm(edit: Product?, code: String, onAdd: (NewProduct) -> Uni
                 QField(cost, { cost = num(it) }, "سعر الشراء", Modifier.weight(1f), ltr = true, keyboard = KeyboardType.Decimal)
                 QField(price, { price = num(it) }, "سعر البيع", Modifier.weight(1f), ltr = true, keyboard = KeyboardType.Decimal, error = if (tried && d(price) <= 0) "مطلوب" else null)
             }
+            QField(sizes, { sizes = it }, "المقاسات (اختياري)", hint = "S، M، L، XL أو 38، 40، 42")
+            QField(colors, { colors = it }, "الألوان (اختياري)", hint = "أسود، أبيض، كحلي")
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 QField(min, { min = num(it) }, "نبّهني عند", Modifier.weight(1f), ltr = true, keyboard = KeyboardType.Decimal, suffix = unit)
-                if (edit == null) QField(qty, { qty = num(it) }, "الكمية الحالية", Modifier.weight(1f), ltr = true, keyboard = KeyboardType.Decimal, suffix = unit)
+                if (edit == null && list(sizes).isEmpty() && list(colors).isEmpty()) QField(qty, { qty = num(it) }, "الكمية الحالية", Modifier.weight(1f), ltr = true, keyboard = KeyboardType.Decimal, suffix = unit)
             }
+            if (list(sizes).isNotEmpty() || list(colors).isNotEmpty()) T("أدخل كمية كل مقاس ولون من \"إدخال بضاعة\" بعد الحفظ.", size = 12.sp, color = p.mute, maxLines = 2)
             QButton(if (edit == null) "إضافة الصنف" else "حفظ", {
                 tried = true
                 if (name.isNotBlank() && d(price) > 0) {
-                    if (edit == null) onAdd(NewProduct(name, barcode, unit, d(cost), d(price), d(min), d(qty)))
-                    else onSave(edit.copy(name = name, barcode = barcode, unit = unit, cost = d(cost), price = d(price), minStock = d(min)))
+                    if (edit == null) onAdd(NewProduct(name, barcode, unit, d(cost), d(price), d(min), d(qty), list(sizes), list(colors)))
+                    else onSave(edit.copy(name = name, barcode = barcode, unit = unit, cost = d(cost), price = d(price), minStock = d(min), sizes = list(sizes), colors = list(colors)))
                 }
             })
         }
