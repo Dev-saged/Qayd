@@ -50,6 +50,7 @@ data class Shop(
     /** حد رسائل الشهر، و-1 بلا حد. */
     val smsQuota: Int = -1,
     val type: String = BizType.General.key,
+    val plan: String = "",
 ) {
     fun smsLeft(used: Int): Int? = smsQuota.takeIf { it >= 0 }?.let { (it - used).coerceAtLeast(0) }
 

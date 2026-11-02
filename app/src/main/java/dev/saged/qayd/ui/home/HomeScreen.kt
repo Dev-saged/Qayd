@@ -89,6 +89,8 @@ fun HomeScreen(
     onStock: () -> Unit = {},
     orders: Triple<Int, Int, Double>? = null,
     onOrders: () -> Unit = {},
+    notice: String? = null,
+    onNoticeClose: () -> Unit = {},
 ) {
     val haptic = LocalHapticFeedback.current
     val now by rememberNow()
@@ -120,6 +122,16 @@ fun HomeScreen(
             PsGrid(slots, now, Modifier.entrance(4)) {
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 onPs(it)
+            }
+        }
+
+        notice?.let { text ->
+            val p = dev.saged.qayd.ui.theme.LocalPalette.current
+            val shape = androidx.compose.foundation.shape.RoundedCornerShape(20.dp)
+            Row(Modifier.fillMaxWidth().clip(shape).background(p.pri.copy(alpha = .12f)).border(1.dp, p.pri.copy(alpha = .45f), shape).padding(14.dp)) {
+                dev.saged.qayd.ui.components.QIcon(dev.saged.qayd.ui.icons.QIcons.Bell, p.pri, Modifier.size(20.dp))
+                T(text, Modifier.weight(1f).padding(horizontal = 10.dp), 13.5.sp, maxLines = 6)
+                T("إخفاء", Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp)).clickable(role = Role.Button, onClick = onNoticeClose).padding(4.dp), 12.sp, FontWeight.SemiBold, p.pri)
             }
         }
 

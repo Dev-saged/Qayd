@@ -166,6 +166,8 @@ fun QaydShell(
     orderActions: dev.saged.qayd.ui.orders.OrderActions = dev.saged.qayd.ui.orders.OrderActions.None,
     holds: List<dev.saged.qayd.data.Hold> = emptyList(),
     holdActions: dev.saged.qayd.ui.holds.HoldActions = dev.saged.qayd.ui.holds.HoldActions.None,
+    notice: String? = null,
+    onNoticeClose: () -> Unit = {},
     more: @Composable (PaddingValues, MoreNav) -> Unit,
 ) = androidx.compose.runtime.CompositionLocalProvider(
     dev.saged.qayd.ui.components.LocalQuickAdds provides dev.saged.qayd.data.BizType.of(shop.type).quickAdds,
@@ -264,6 +266,7 @@ fun QaydShell(
                                 Triple(t.size, t.count { it.status == dev.saged.qayd.data.OrderStatus.New }, t.sumOf { it.total })
                             },
                             onOrders = { page = Page.Orders },
+                            notice = notice, onNoticeClose = onNoticeClose,
                             locked = locked,
                         )
                         Tab.Customers -> CustomersScreen(

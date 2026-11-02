@@ -1,20 +1,18 @@
 # session-handoff
 
 ## State
-- v1.0.0 released: all roadmap phases done (shell, auth/offline, quick sale + numpad, customers/debts, expenses + recurring, team/perms/audit, PlayStation sync + alarms, electricity rounds, SMS gateway + templates, PDF statements/receipts, owner panel + paid features, reports, biometric lock, backup, self-update).
-- Backend: rules enforce perms/features/isolation; Worker qayd-admin (shops, staff, app updates from KV). smoke-admin.mjs 31/31 passing.
-- Keys in secrets/ (private repo). CI signs, releases, and publishes the APK to KV on every main build.
+- v1.7.0 on main. All roadmap phases after 1.3 done: business types, inventory+barcode, suppliers (1.4); menu/orders + BT printer (1.5); sizes/colors, returns, deposits (1.6); plans, payments, presence, renewals, broadcast, support view (1.7).
+- Backend rules + Worker deployed with every phase. Keys in secrets/.
+- Sajed tests on device himself; no automated test runs requested for 1.4-1.7.
 
 ## Decisions
-- v1.3.0: update sheet + background download pill + Updates page with in-app release history; paid features open PaidSheet.
-- v1.2.0: permissions onboarding, session-based self-update (avoids Android restricted settings), Qayd folder for backups/invoices, premium PDF.
-- v1.1.0: Kufi icon (B2), theme mode, auto backup (paid-able), SMS monthly quota per shop (-1 unlimited), bulk segments, dev card.
-- SMS: Firestore queue + in-app gateway service (not LAN HTTP).
-- Self-update via Worker KV because the repo is private.
-- Paid features: config/features free|paid + shops.paid; enforced in rules for ps/electricity/sms.
+- Stock qty derived from moves (like balances). Returns = negative sale + return move.
+- Orders write a sale tx in the same batch; cancel deletes it (deleteTx perm).
+- Printer prints Arabic as raster image (ESC/POS GS v 0).
+- Support mode = ShopRoot as SuperAdmin with read-only Access.
 
-## Open (after 1.0)
-- Meter OCR, PS screen transfer, iOS. Device testing by Sajed.
+## Open
+- Device testing of 1.4-1.7 by Sajed. Key rotation (Firebase SA, Cloudflare token) still pending on his side.
 
 ## Next step
-- Fix issues Sajed reports from real-device testing.
+- Fix what Sajed reports.

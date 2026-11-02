@@ -31,6 +31,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.clickable
+import dev.saged.qayd.BuildConfig
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
@@ -140,6 +143,23 @@ private fun AdminRoot(vm: AppViewModel, account: Account) {
     val data by flow.collectAsStateWithLifecycle(emptyList<Shop>() to SyncState.Offline)
     val op by vm.adminOp.collectAsStateWithLifecycle()
     val features by remember { vm.repo.features() }.collectAsStateWithLifecycle(emptyMap())
+    val presence by remember { vm.repo.presence() }.collectAsStateWithLifecycle(emptyMap())
+    val plans by remember { vm.repo.plans() }.collectAsStateWithLifecycle(emptyList())
+    val payments by remember { vm.repo.payments() }.collectAsStateWithLifecycle(emptyList())
+    val broadcast by remember { vm.repo.broadcast() }.collectAsStateWithLifecycle(null)
+    var support by remember { mutableStateOf<Shop?>(null) }
+    support?.let { s ->
+        androidx.activity.compose.BackHandler { support = null }
+        return Box(Modifier.fillMaxSize()) {
+            ShopRoot(vm, account.copy(shopId = s.id)) { support = null }
+            val p = LocalPalette.current
+            Row(
+                Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = 100.dp).clip(RoundedCornerShape(16.dp))
+                    .background(p.warn).clickable { support = null }.padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) { T("وضع الدعم: ${s.name} · قراءة فقط · اضغط للخروج", size = 12.5.sp, weight = FontWeight.SemiBold, color = p.onPri) }
+        }
+    }
     AdminScreen(
         account = account, shops = data.first, sync = data.second, op = op,
         onCreate = vm::createShop,
@@ -149,20 +169,33 @@ private fun AdminRoot(vm: AppViewModel, account: Account) {
         features = features,
         onFeature = vm.repo::setFeature,
         onSaveShop = { s, m, n, paid, lic, name, quota, type -> vm.repo.updateShop(s.id, m, n, paid, lic, name, quota, type) },
+        presence = presence, plans = plans, payments = payments, broadcast = broadcast,
+        onSavePlans = vm.repo::savePlans,
+        onApplyPlan = { s, pl, until -> vm.repo.applyPlan(s.id, pl, until) },
+        onPayment = { s, amount, months, plan, note ->
+            vm.repo.addPayment(s.id, amount, months, plan, note)
+            val from = maxOf(s.licenseUntil ?: 0L, System.currentTimeMillis())
+            vm.repo.updateShop(s.id, s.modules, s.psScreens, s.paid, from + months * 30L * 86_400_000L, s.name, s.smsQuota, s.type)
+            if (!s.active) vm.repo.setShopActive(s.id, true)
+        },
+        onBroadcast = vm.repo::setBroadcast,
+        onSupport = { support = it },
     )
 }
 
 @Composable
-private fun ShopRoot(vm: AppViewModel, account: Account) {
-    val shopId = account.shopId ?: return Blocked("الحساب غير مرتبط بمحل", vm::signOut)
+private fun ShopRoot(vm: AppViewModel, account: Account, onExit: (() -> Unit)? = null) {
+    val exit: () -> Unit = onExit ?: vm::signOut
+    val support = account.role == Role.SuperAdmin
+    val shopId = account.shopId ?: return Blocked("الحساب غير مرتبط بمحل", exit)
     val flow = remember(shopId) { vm.repo.shop(shopId) }
     val state by flow.collectAsStateWithLifecycle(null)
     val current = state ?: return Splash()
     val shop = current.first
     when {
-        shop == null && current.second == SyncState.Synced -> Blocked("المحل غير موجود", vm::signOut)
+        shop == null && current.second == SyncState.Synced -> Blocked("المحل غير موجود", exit)
         shop == null -> Splash()
-        shop.blockReason() != null -> Blocked(shop.blockReason()!!, vm::signOut)
+        shop.blockReason() != null -> Blocked(shop.blockReason()!!, exit)
         else -> {
             val op by vm.adminOp.collectAsStateWithLifecycle()
             val ctx = LocalContext.current
@@ -171,7 +204,7 @@ private fun ShopRoot(vm: AppViewModel, account: Account) {
             val slots = remember(shop.psScreens, live) {
                 idleSlots(shop.psScreens).map { s -> live.firstOrNull { it.number == s.number && it.running } ?: s }
             }
-            LaunchedEffect(slots) { if (Module.Ps in shop.modules) PsAlarms.sync(ctx, slots) }
+            LaunchedEffect(slots) { if (Module.Ps in shop.modules && !support) PsAlarms.sync(ctx, slots) }
             val askNotif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
             LaunchedEffect(Unit) {
                 if (Build.VERSION.SDK_INT >= 33 &&
@@ -258,15 +291,31 @@ private fun ShopRoot(vm: AppViewModel, account: Account) {
                 }
             }
             val me = members.firstOrNull { it.uid == account.uid }
-            val access = if (account.role == Role.Owner) Access.Full else Access(Role.Staff, me?.perms.orEmpty(), me?.active ?: true)
-            if (!access.active) return Blocked("حسابك موقوف من صاحب المحل", vm::signOut)
-            QaydShell(shop, account, current.second, ledger, slots, actions, access, members, audit, prices, power, gateway, queue, templates, features, smsUsed, stock, suppliers, stockActions, menu, orders, orderActions, holds, holdActions) { pad, nav ->
+            val access = when {
+                account.role == Role.Owner -> Access.Full
+                support -> Access(Role.Staff, setOf(dev.saged.qayd.data.Perm.ViewBalances, dev.saged.qayd.data.Perm.ViewReports, dev.saged.qayd.data.Perm.ExportPdf))
+                else -> Access(Role.Staff, me?.perms.orEmpty(), me?.active ?: true)
+            }
+            LaunchedEffect(shop.id) {
+                if (!support) {
+                    kotlinx.coroutines.delay(6_000)
+                    vm.repo.touchPresence(shop.id, BuildConfig.VERSION_NAME.substringBefore('-'), account.displayName, customers.size, members.size, smsUsed)
+                }
+            }
+            val broadcast by remember { vm.repo.broadcast() }.collectAsStateWithLifecycle(null)
+            val prefs = remember { ctx.getSharedPreferences("qayd_notice", android.content.Context.MODE_PRIVATE) }
+            var seenNotice by remember { mutableStateOf(prefs.getLong("seen", 0L)) }
+            val notice = broadcast?.takeIf { it.active && it.text.isNotBlank() && it.at > seenNotice }
+            if (!access.active) return Blocked("حسابك موقوف من صاحب المحل", exit)
+            QaydShell(shop, account, current.second, ledger, slots, actions, access, members, audit, prices, power, gateway, queue, templates, features, smsUsed, stock, suppliers, stockActions, menu, orders, orderActions, holds, holdActions,
+                notice = notice?.text, onNoticeClose = { notice?.let { prefs.edit().putLong("seen", it.at).apply(); seenNotice = it.at } },
+            ) { pad, nav ->
                 MoreScreen(
                     padding = pad, shop = shop, account = account, sync = current.second, op = op,
                     onRename = { vm.repo.renameShop(shop.id, it) },
                     onAddStaff = vm::createStaff,
                     onClearOp = vm::clearOp,
-                    onSignOut = vm::signOut,
+                    onSignOut = exit,
                     nav = nav,
                     autoBackup = if (account.role == Role.Owner) shop.unlocked("autoBackup", features) else null,
                 )

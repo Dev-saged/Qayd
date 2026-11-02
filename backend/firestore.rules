@@ -43,6 +43,16 @@ service cloud.firestore {
       allow write: if isSuper();
     }
 
+    match /presence/{shopId} {
+      allow read: if isSuper();
+      allow write: if inShop(shopId)
+        && request.resource.data.keys().hasOnly(['lastSeen', 'version', 'by', 'customers', 'members', 'smsUsed']);
+    }
+
+    match /payments/{id} {
+      allow read, write: if isSuper();
+    }
+
     match /suffixes/{suffix} {
       allow read: if isSuper();
       allow write: if false;

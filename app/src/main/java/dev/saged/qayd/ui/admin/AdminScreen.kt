@@ -77,9 +77,21 @@ fun AdminScreen(
     features: Map<String, String> = emptyMap(),
     onFeature: (String, Boolean) -> Unit = { _, _ -> },
     onSaveShop: (Shop, Set<Module>, Int, Set<String>, Long?, String, Int, String) -> Unit = { _, _, _, _, _, _, _, _ -> },
+    presence: Map<String, dev.saged.qayd.data.Presence> = emptyMap(),
+    plans: List<dev.saged.qayd.data.Plan> = emptyList(),
+    payments: List<dev.saged.qayd.data.Payment> = emptyList(),
+    broadcast: dev.saged.qayd.data.Broadcast? = null,
+    onSavePlans: (List<dev.saged.qayd.data.Plan>) -> Unit = {},
+    onApplyPlan: (Shop, dev.saged.qayd.data.Plan, Long?) -> Unit = { _, _, _ -> },
+    onPayment: (Shop, Double, Int, String, String) -> Unit = { _, _, _, _, _ -> },
+    onBroadcast: (String, Boolean) -> Unit = { _, _ -> },
+    onSupport: (Shop) -> Unit = {},
 ) {
     val p = LocalPalette.current
     var creating by rememberSaveable { mutableStateOf(false) }
+    var plansOpen by rememberSaveable { mutableStateOf(false) }
+    var broadcastOpen by rememberSaveable { mutableStateOf(false) }
+    val day = 86_400_000L
     var editing by remember { mutableStateOf<Shop?>(null) }
     var featuresOpen by rememberSaveable { mutableStateOf(false) }
 
@@ -106,6 +118,35 @@ fun AdminScreen(
                 Stat("فعّالة", shops.count { it.blockReason() == null }.toString(), Modifier.weight(1f))
                 Stat("موقوفة", shops.count { it.blockReason() != null }.toString(), Modifier.weight(1f))
             }
+            val monthStart = java.util.Calendar.getInstance().apply { set(java.util.Calendar.DAY_OF_MONTH, 1); set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0) }.timeInMillis
+            Row(Modifier.entrance(1), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Stat("دخل الاشتراكات هذا الشهر", dev.saged.qayd.ui.util.cur(payments.filter { it.at >= monthStart }.sumOf { it.amount }), Modifier.weight(1.6f))
+                Stat("نشطة اليوم", presence.values.count { System.currentTimeMillis() - it.lastSeen < day }.toString(), Modifier.weight(1f))
+            }
+
+            val soon = shops.filter { s -> s.active && (s.daysLeft()?.let { it <= 7 } ?: false) }.sortedBy { it.licenseUntil }
+            if (soon.isNotEmpty()) Column(
+                Modifier.entrance(2).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(p.warn.copy(alpha = .1f)).border(1.dp, p.warn.copy(alpha = .4f), RoundedCornerShape(20.dp)).padding(14.dp),
+            ) {
+                T("اشتراكات تنتهي قريباً", size = 14.5.sp, weight = FontWeight.SemiBold, color = p.warn)
+                soon.forEach { s ->
+                    val d = s.daysLeft() ?: 0
+                    Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            T(s.name, size = 14.sp, weight = FontWeight.Medium)
+                            T(if (d < 0) "انتهى منذ ${-d} يوم" else if (d == 0) "ينتهي اليوم" else "باقٍ $d يوم", size = 12.sp, color = if (d < 0) p.danger else p.mute)
+                        }
+                        T("تجديد", Modifier.clip(RoundedCornerShape(10.dp)).background(p.pri.copy(alpha = .16f)).clickable(role = Role.Button) { editing = s }
+                            .padding(horizontal = 14.dp, vertical = 8.dp), 13.sp, FontWeight.SemiBold, p.pri)
+                    }
+                }
+            }
+
+            Column(Modifier.entrance(2).fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(p.surface).border(1.dp, p.line, RoundedCornerShape(20.dp)).padding(6.dp)) {
+                dev.saged.qayd.ui.components.ActionRow(QIcons.Box, "الباقات", "${plans.size} باقة · تفعيل مجموعة مميزات بضغطة") { plansOpen = true }
+                dev.saged.qayd.ui.components.ActionRow(QIcons.Lock, "المميزات المدفوعة", "حدد ما هو مجاني وما هو مدفوع") { featuresOpen = true }
+                dev.saged.qayd.ui.components.ActionRow(QIcons.Msg, "رسالة لكل المحلات", if (broadcast?.active == true) "منشورة: ${broadcast.text}" else "إعلان يظهر في الرئيسية عند الجميع") { broadcastOpen = true }
+            }
 
             T("المحلات", Modifier.entrance(2).padding(top = 4.dp), 14.5.sp, FontWeight.SemiBold)
             if (shops.isEmpty()) {
@@ -119,7 +160,7 @@ fun AdminScreen(
                     T("أنشئ أول محل من الزر في الأسفل.", size = 13.sp, color = p.mute)
                 }
             } else {
-                shops.forEachIndexed { i, s -> ShopCard(s, Modifier.entrance(3 + i.coerceAtMost(6)).clickable(role = Role.Button) { editing = s }) { onToggle(s, it) } }
+                shops.forEachIndexed { i, s -> ShopCard(s, presence[s.id], Modifier.entrance(3 + i.coerceAtMost(6)).clickable(role = Role.Button) { editing = s }) { onToggle(s, it) } }
             }
             Spacer(Modifier.height(110.dp))
         }
@@ -145,7 +186,17 @@ fun AdminScreen(
     }
 
     if (creating) CreateShopSheet(op, onCreate) { creating = false; onClearOp() }
-    editing?.let { s -> EditShopSheet(s, features, { m, n, paid, lic, name, quota, type -> onSaveShop(s, m, n, paid, lic, name, quota, type); editing = null }) { editing = null } }
+    editing?.let { s ->
+        EditShopSheet(
+            s, features, { m, n, paid, lic, name, quota, type -> onSaveShop(s, m, n, paid, lic, name, quota, type); editing = null },
+            plans = plans, payments = payments.filter { it.shopId == s.id },
+            onApplyPlan = { pl, until -> onApplyPlan(s, pl, until); editing = null },
+            onPayment = { a, months, note -> onPayment(s, a, months, s.plan, note); editing = null },
+            onSupport = { onSupport(s); editing = null },
+        ) { editing = null }
+    }
+    if (plansOpen) PlansSheet(plans, onSavePlans) { plansOpen = false }
+    if (broadcastOpen) BroadcastSheet(broadcast, onBroadcast) { broadcastOpen = false }
     if (featuresOpen) {
         QSheet("المميزات: مجانية أم مدفوعة", { featuresOpen = false }) {
             T("الميزة المدفوعة تُقفل عند كل محل لم تفعّلها له، ويظهر له زر التواصل معك.", size = 12.5.sp, color = p.mute, maxLines = 2)
@@ -159,8 +210,14 @@ private fun EditShopSheet(
     s: Shop,
     features: Map<String, String>,
     onSave: (Set<Module>, Int, Set<String>, Long?, String, Int, String) -> Unit,
+    plans: List<dev.saged.qayd.data.Plan> = emptyList(),
+    payments: List<dev.saged.qayd.data.Payment> = emptyList(),
+    onApplyPlan: (dev.saged.qayd.data.Plan, Long?) -> Unit = { _, _ -> },
+    onPayment: (Double, Int, String) -> Unit = { _, _, _ -> },
+    onSupport: () -> Unit = {},
     onDismiss: () -> Unit,
 ) {
+    var paying by remember { mutableStateOf(false) }
     val p = LocalPalette.current
     var name by rememberSaveable(s.id) { mutableStateOf(s.name) }
     var mods by rememberSaveable(s.id) { mutableStateOf(s.modules.map { it.key }.toSet()) }
@@ -204,7 +261,28 @@ private fun EditShopSheet(
                 }
             }
             QButton("بدون تاريخ انتهاء", { until = null }, secondary = true)
+            if (plans.isNotEmpty()) {
+                T("تطبيق باقة", Modifier.padding(top = 6.dp), 14.sp, FontWeight.SemiBold)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    plans.forEach { pl ->
+                        val on = pl.id == s.plan
+                        T("${pl.name} · ${dev.saged.qayd.ui.util.cur(pl.price)}", Modifier.clip(RoundedCornerShape(12.dp)).background(if (on) p.pri.copy(alpha = .18f) else p.surface2)
+                            .clickable(role = Role.Button) { onApplyPlan(pl, until) }.padding(horizontal = 12.dp, vertical = 9.dp), 13.sp, if (on) FontWeight.SemiBold else FontWeight.Normal, if (on) p.pri else p.ink)
+                    }
+                }
+                T("تطبيق الباقة يفعّل مميزاتها ويقفل غيرها لهذا المحل، مع تاريخ الاشتراك المحدد أعلاه.", size = 12.sp, color = p.mute, maxLines = 2)
+            }
+            T("الدفعات", Modifier.padding(top = 6.dp), 14.sp, FontWeight.SemiBold)
+            payments.take(6).forEach { pay ->
+                Row(Modifier.padding(vertical = 3.dp)) {
+                    T("${dev.saged.qayd.ui.util.dayLabel(pay.at)} · ${pay.months} شهر${if (pay.note.isNotBlank()) " · ${pay.note}" else ""}", Modifier.weight(1f), 12.5.sp, color = p.mute)
+                    T(dev.saged.qayd.ui.util.cur(pay.amount), size = 13.sp, weight = FontWeight.SemiBold)
+                }
+            }
+            QButton("تسجيل دفعة وتمديد الاشتراك", { paying = true }, secondary = true)
+            QButton("عرض المحل للدعم (قراءة فقط)", onSupport, secondary = true)
             Spacer(Modifier.height(6.dp))
+            if (paying) PaymentSheet(onPayment) { paying = false }
             QButton("حفظ", {
                 onSave(Module.entries.filter { it.key in mods }.toSet(), screens, paid, until, name.ifBlank { s.name }, if (unlimited) -1 else quota.toIntOrNull() ?: 0, type)
             })
@@ -223,7 +301,7 @@ private fun Stat(label: String, value: String, modifier: Modifier) {
 }
 
 @Composable
-private fun ShopCard(s: Shop, modifier: Modifier, onToggle: (Boolean) -> Unit) {
+private fun ShopCard(s: Shop, pr: dev.saged.qayd.data.Presence?, modifier: Modifier, onToggle: (Boolean) -> Unit) {
     val p = LocalPalette.current
     val shape = RoundedCornerShape(20.dp)
     val blocked = s.blockReason()
@@ -235,9 +313,14 @@ private fun ShopCard(s: Shop, modifier: Modifier, onToggle: (Boolean) -> Unit) {
             ) { T(s.name.take(1), size = 17.sp, weight = FontWeight.Bold, color = p.onPri) }
             Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                 T(s.name, size = 15.5.sp, weight = FontWeight.SemiBold)
-                T("⁦@${s.suffix}⁩", size = 12.5.sp, color = p.mute)
+                T("⁦@${s.suffix}⁩ · ${dev.saged.qayd.data.BizType.of(s.type).label}", size = 12.5.sp, color = p.mute)
             }
         }
+        T(
+            pr?.let { "آخر نشاط ${dev.saged.qayd.ui.util.dayLabel(it.lastSeen)} ${dev.saged.qayd.ui.util.clock(it.lastSeen)} · ⁦v${it.version}⁩ · ${it.members} حساب · ${it.customers} زبون · ${it.smsUsed} رسالة هذا الشهر" }
+                ?: "لم يُفتح التطبيق بعد",
+            Modifier.padding(top = 10.dp), 12.sp, color = p.mute, maxLines = 2,
+        )
         if (s.modules.isNotEmpty()) {
             FlowRow(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 s.modules.sortedBy { it.ordinal }.forEach { m ->
@@ -355,6 +438,81 @@ private fun BizPicker(current: String, onPick: (dev.saged.qayd.data.BizType) -> 
                     .clickable(role = Role.RadioButton) { onPick(t) }.padding(horizontal = 12.dp, vertical = 9.dp),
                 13.sp, if (on) FontWeight.SemiBold else FontWeight.Normal, if (on) p.pri else p.ink,
             )
+        }
+    }
+}
+
+@Composable
+private fun PaymentSheet(onPay: (Double, Int, String) -> Unit, onDismiss: () -> Unit) {
+    val p = LocalPalette.current
+    var amount by rememberSaveable { mutableStateOf("") }
+    var months by rememberSaveable { mutableStateOf(1) }
+    var note by rememberSaveable { mutableStateOf("") }
+    QSheet("دفعة اشتراك", onDismiss) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            QField(amount, { amount = it.filter { c -> c.isDigit() || c == '.' } }, "المبلغ المدفوع", ltr = true, keyboard = KeyboardType.Decimal)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(1 to "شهر", 3 to "3 أشهر", 6 to "6 أشهر", 12 to "سنة").forEach { (m, l) ->
+                    val on = m == months
+                    T(l, Modifier.weight(1f).clip(RoundedCornerShape(12.dp)).background(if (on) p.pri.copy(alpha = .18f) else p.surface2)
+                        .clickable(role = Role.RadioButton) { months = m }.padding(vertical = 10.dp), 13.sp, if (on) FontWeight.SemiBold else FontWeight.Normal, if (on) p.pri else p.ink)
+                }
+            }
+            QField(note, { note = it }, "ملاحظة (اختياري)", hint = "نقداً، تحويل")
+            QButton("تسجيل وتمديد $months شهر", { amount.toDoubleOrNull()?.let { onPay(it, months, note); onDismiss() } })
+        }
+    }
+}
+
+@Composable
+private fun PlansSheet(plans: List<dev.saged.qayd.data.Plan>, onSave: (List<dev.saged.qayd.data.Plan>) -> Unit, onDismiss: () -> Unit) {
+    val p = LocalPalette.current
+    var editing by remember { mutableStateOf<dev.saged.qayd.data.Plan?>(null) }
+    QSheet("الباقات", onDismiss) {
+        val e = editing
+        if (e == null) {
+            plans.forEach { pl ->
+                Column(Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(RoundedCornerShape(16.dp)).background(p.surface2).clickable(role = Role.Button) { editing = pl }.padding(14.dp)) {
+                    Row {
+                        T(pl.name, Modifier.weight(1f), 15.sp, FontWeight.SemiBold)
+                        T("${dev.saged.qayd.ui.util.cur(pl.price)} / شهر", size = 13.5.sp, color = p.pri)
+                    }
+                    T(FEATURES.filter { it.first in pl.features }.joinToString("، ") { it.second }.ifBlank { "بدون مميزات مدفوعة" }, Modifier.padding(top = 4.dp), 12.sp, color = p.mute, maxLines = 3)
+                }
+            }
+            if (plans.isEmpty()) T("أنشئ باقات مثل: أساسية، متقدمة، كاملة.", size = 13.sp, color = p.mute)
+            Spacer(Modifier.height(10.dp))
+            QButton("باقة جديدة", { editing = dev.saged.qayd.data.Plan("", "", 0.0, emptySet()) })
+        } else {
+            var name by remember(e) { mutableStateOf(e.name) }
+            var price by remember(e) { mutableStateOf(if (e.price > 0) dev.saged.qayd.ui.util.money(e.price) else "") }
+            var feats by remember(e) { mutableStateOf(e.features) }
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                QField(name, { name = it }, "اسم الباقة", hint = "المتقدمة")
+                QField(price, { price = it.filter { c -> c.isDigit() || c == '.' } }, "السعر الشهري", ltr = true, keyboard = KeyboardType.Decimal)
+                FEATURES.forEach { (k, l) -> QSwitchRow(l, k in feats, { on -> feats = if (on) feats + k else feats - k }) }
+                QButton("حفظ الباقة", {
+                    if (name.isNotBlank()) {
+                        val pl = e.copy(id = e.id.ifBlank { "p" + System.currentTimeMillis().toString(36) }, name = name.trim(), price = price.toDoubleOrNull() ?: 0.0, features = feats)
+                        onSave(plans.filter { it.id != pl.id } + pl)
+                        editing = null
+                    }
+                })
+                if (e.id.isNotBlank()) QButton("حذف الباقة", { onSave(plans.filter { it.id != e.id }); editing = null }, secondary = true)
+                QButton("رجوع", { editing = null }, secondary = true)
+            }
+        }
+    }
+}
+
+@Composable
+private fun BroadcastSheet(b: dev.saged.qayd.data.Broadcast?, onSave: (String, Boolean) -> Unit, onDismiss: () -> Unit) {
+    var text by rememberSaveable { mutableStateOf(b?.text.orEmpty()) }
+    QSheet("رسالة لكل المحلات", onDismiss) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            QField(text, { text = it }, "نص الرسالة", hint = "تحديث جديد متاح، أو عرض خاص هذا الشهر…", lines = 4)
+            QButton("نشر لكل المحلات", { if (text.isNotBlank()) { onSave(text, true); onDismiss() } })
+            if (b?.active == true) QButton("إيقاف الرسالة الحالية", { onSave(b.text, false); onDismiss() }, secondary = true)
         }
     }
 }

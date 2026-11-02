@@ -193,6 +193,7 @@ class QaydRepo(context: Context) {
             paid = (get("paid") as? Map<*, *>).orEmpty().filterValues { it == true }.keys.map { it.toString() }.toSet(),
             smsQuota = (getLong("smsQuota") ?: -1L).toInt(),
             type = getString("type") ?: BizType.General.key,
+            plan = getString("plan").orEmpty(),
         )
     }
 
@@ -725,5 +726,75 @@ class QaydRepo(context: Context) {
     fun cancelHold(shopId: String, h: Hold) {
         db.document("shops/$shopId/holds/${h.id}").update(mapOf("status" to HoldStatus.Cancelled.key, "updatedAt" to FieldValue.serverTimestamp()))
         log(shopId, "إلغاء حجز", "${h.title} · ${h.name}", h.paid)
+    }
+
+    /* ---------- لوحة المالك: باقات، نشاط، دفعات، رسالة عامة ---------- */
+
+    fun plans(): Flow<List<Plan>> = callbackFlow {
+        val reg = db.document("config/plans").addSnapshotListener { s, _ ->
+            trySend((s?.get("list") as? List<*>).orEmpty().mapNotNull { x ->
+                (x as? Map<*, *>)?.let { m ->
+                    Plan(m["id"]?.toString().orEmpty(), m["name"]?.toString().orEmpty(), (m["price"] as? Number)?.toDouble() ?: 0.0,
+                        (m["features"] as? List<*>).orEmpty().map { it.toString() }.toSet())
+                }
+            })
+        }
+        awaitClose { reg.remove() }
+    }
+
+    fun savePlans(list: List<Plan>) {
+        db.document("config/plans").set(mapOf("list" to list.map { mapOf("id" to it.id, "name" to it.name, "price" to it.price, "features" to it.features.toList()) }))
+    }
+
+    /** تطبيق باقة: مميزاتها مفعّلة وغيرها مقفلة، مع تمديد الاشتراك. */
+    fun applyPlan(shopId: String, plan: Plan, until: Long?) {
+        db.document("shops/$shopId").update(mapOf(
+            "plan" to plan.id, "paid" to FEATURES.associate { it.first to (it.first in plan.features) },
+            "licenseUntil" to until?.let { Timestamp(java.util.Date(it)) }, "updatedAt" to FieldValue.serverTimestamp(),
+        ))
+    }
+
+    fun presence(): Flow<Map<String, Presence>> = callbackFlow {
+        val reg = db.collection("presence").addSnapshotListener { s, _ ->
+            trySend(s?.documents.orEmpty().associate { d ->
+                d.id to Presence(d.millis("lastSeen"), d.getString("version").orEmpty(), d.getString("by").orEmpty(),
+                    (d.getLong("customers") ?: 0L).toInt(), (d.getLong("members") ?: 0L).toInt(), (d.getLong("smsUsed") ?: 0L).toInt())
+            })
+        }
+        awaitClose { reg.remove() }
+    }
+
+    fun touchPresence(shopId: String, version: String, by: String, customers: Int, members: Int, smsUsed: Int) {
+        db.document("presence/$shopId").set(mapOf(
+            "lastSeen" to FieldValue.serverTimestamp(), "version" to version, "by" to by,
+            "customers" to customers, "members" to members, "smsUsed" to smsUsed,
+        ))
+    }
+
+    fun payments(): Flow<List<Payment>> = callbackFlow {
+        val reg = db.collection("payments").orderBy("at", Query.Direction.DESCENDING).limit(300).addSnapshotListener { s, _ ->
+            trySend(s?.documents.orEmpty().map { d ->
+                Payment(d.id, d.getString("shopId").orEmpty(), d.getDouble("amount") ?: 0.0, (d.getLong("months") ?: 0L).toInt(),
+                    d.getString("plan").orEmpty(), d.getString("note").orEmpty(), d.millis("at"))
+            })
+        }
+        awaitClose { reg.remove() }
+    }
+
+    fun addPayment(shopId: String, amount: Double, months: Int, plan: String, note: String) {
+        db.collection("payments").document().set(mapOf(
+            "shopId" to shopId, "amount" to round2(amount), "months" to months, "plan" to plan, "note" to note.trim(), "at" to Timestamp(java.util.Date()),
+        ))
+    }
+
+    fun broadcast(): Flow<Broadcast?> = callbackFlow {
+        val reg = db.document("config/broadcast").addSnapshotListener { s, _ ->
+            trySend(s?.takeIf { it.exists() }?.let { Broadcast(it.getString("text").orEmpty(), it.millis("at"), it.getBoolean("active") == true) })
+        }
+        awaitClose { reg.remove() }
+    }
+
+    fun setBroadcast(text: String, active: Boolean) {
+        db.document("config/broadcast").set(mapOf("text" to text.trim(), "active" to active, "at" to Timestamp(java.util.Date())))
     }
 }
