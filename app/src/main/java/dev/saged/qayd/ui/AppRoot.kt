@@ -255,6 +255,10 @@ private fun ShopRoot(vm: AppViewModel, account: Account, onExit: (() -> Unit)? =
                     dev.saged.qayd.data.StatementLinks.of = if (smsSettings.link) ({ c -> vm.repo.ensureLink(shop.id, c) }) else ({ null })
                 }
             }
+            LaunchedEffect(ledger.todaySales, ledger.totalDebt, shop.name) {
+                if (!support) dev.saged.qayd.system.QaydWidget.update(ctx, shop.name, ledger.todaySales, ledger.totalDebt)
+            }
+            LaunchedEffect(Unit) { dev.saged.qayd.voice.VoiceInbox.load(ctx) }
             val wallets by remember(shop.id) { vm.repo.wallets(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val closes by remember(shop.id) { vm.repo.closes(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val products by remember(shop.id) { vm.repo.products(shop.id) }.collectAsStateWithLifecycle(emptyList())

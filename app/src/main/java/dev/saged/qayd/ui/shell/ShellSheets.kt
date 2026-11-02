@@ -117,8 +117,9 @@ fun PricesSheet(prices: Prices, ps: Boolean, power: Boolean, onEdit: (PadRequest
 }
 
 @Composable
-fun NewActionSheet(access: Access, onPick: (TxKind) -> Unit, onDismiss: () -> Unit) {
+fun NewActionSheet(access: Access, onPick: (TxKind) -> Unit, onDismiss: () -> Unit, onVoice: (() -> Unit)? = null) {
     QSheet("عملية جديدة", onDismiss) {
+        onVoice?.let { ActionRow(QIcons.Mic, "إدخال بالصوت", "سجّل الآن وراجع لاحقاً من صندوق الصوت", onClick = it) }
         if (access.can(Perm.QuickSale)) ActionRow(QIcons.Cart, "بيع سريع", "مبلغ فقط، يُسجل فوراً كبيع للمحل") { onPick(TxKind.Sale) }
         if (access.can(Perm.AddDebt)) ActionRow(QIcons.Up, "دين على زبون", "اختر الزبون ثم المبلغ") { onPick(TxKind.Debt) }
         if (access.can(Perm.AddPayment)) ActionRow(QIcons.Down, "دفعة من زبون", "تُخصم من رصيده، والزيادة تبقى له") { onPick(TxKind.Payment) }
@@ -170,7 +171,20 @@ fun NewCustomerForm(initialName: String = "", onSave: (String, String) -> Unit) 
     var name by rememberSaveable { mutableStateOf(initialName) }
     var phone by rememberSaveable { mutableStateOf("") }
     var tried by rememberSaveable { mutableStateOf(false) }
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val pick = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { r ->
+        r.data?.data?.let { uri ->
+            runCatching {
+                ctx.contentResolver.query(uri, arrayOf(
+                    android.provider.ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, android.provider.ContactsContract.CommonDataKinds.Phone.NUMBER,
+                ), null, null, null)?.use { c -> if (c.moveToFirst()) { name = c.getString(0).orEmpty(); phone = c.getString(1).orEmpty().filter { ch -> ch.isDigit() || ch == '+' } } }
+            }
+        }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        T("من جهات الاتصال", Modifier.clip(androidx.compose.foundation.shape.RoundedCornerShape(10.dp)).clickable(role = androidx.compose.ui.semantics.Role.Button) {
+            runCatching { pick.launch(android.content.Intent(android.content.Intent.ACTION_PICK, android.provider.ContactsContract.CommonDataKinds.Phone.CONTENT_URI)) }
+        }.padding(6.dp), 12.5.sp, FontWeight.Medium, LocalPalette.current.pri)
         QField(name, { name = it }, "اسم الزبون", hint = "محمود أبو سعدة", error = if (tried && name.isBlank()) "اكتب الاسم" else null)
         QField(phone, { phone = it.filter { c -> c.isDigit() || c == '+' } }, "رقم الجوال (اختياري)", hint = "0599123456", ltr = true, keyboard = KeyboardType.Phone)
         QButton("حفظ الزبون", { tried = true; if (name.isNotBlank()) onSave(name, phone) })

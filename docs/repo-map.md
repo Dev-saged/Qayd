@@ -46,6 +46,7 @@
 ## Changes
 - v0.1.0: shell + home (direction A), icon, CI, per-build releases.
 - v0.2.0: Firebase auth + offline session, super admin panel, staff creation, shop rename, sync chip, Worker + rules.
+- v1.11.0: voice/ (VoiceParse Arabic numbers + fuzzy customer, VoiceInbox local list + WAV Recorder + SpeechRecognizer from PCM pipe API33+, on-device when available), ui/voice (VoiceRecordSheet, VoiceInboxPage with player), system/QaydWidget (RemoteViews, launch extras via singleTop), contacts picker in NewCustomerForm.
 - v1.10.0: Tx.wallet/payer/payerPhone/verify, TxKind.Discount, settings/payments wallets, closes collection + Ledger.cashToday, ui/money (TransfersPage, PayerSheet, CashClosePage), Report byWallet/monthDiscounts/topCustomers, Perm confirmTransfers/discount.
 - v1.9.0: SmsSettings (settings/sms), StatementLinks + links/{token} + Worker GET /s/{token} HTML, Customer.limit/waPrefix/link, PadRequest.Limit + over-limit sheet, notify/SmsSchedule (exact alarms pre/run on designated device, WorkManager GatewayCheck), gateway/request flow, openWhatsApp, QaydRepo.get singleton.
 - v1.8.0: ui/components/Avatars (12 drawn looks, members.avatar), QSwitchGroup + QSheet footer, system/SavedLogins (Keystore AES-GCM), DevFooter on login, Worker cron */10 (backup one shop per run into KV bk:{shop}:{iso} ttl 7d, daily cleanup), /v1/backups/list|get|run, /v1/shops/remove; repo wipe/delete/restore as super; rules super recursive on shops.

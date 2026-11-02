@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/w_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_bg"
+    android:layoutDirection="rtl"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <ImageView
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:contentDescription="@string/app_name"
+            android:src="@drawable/qayd_logo" />
+
+        <TextView
+            android:id="@+id/w_shop"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:fontFamily="@font/readex_semibold"
+            android:maxLines="1"
+            android:text="@string/app_name"
+            android:textColor="#FFF3ECDC"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/w_time"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="@font/readex_regular"
+            android:textColor="#FF9AA3B5"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="10dp"
+        android:background="@drawable/widget_rule" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/readex_regular"
+                android:text="مبيعات اليوم"
+                android:textColor="#FF9AA3B5"
+                android:textSize="11.5sp" />
+            <TextView
+                android:id="@+id/w_sales"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/readex_bold"
+                android:textColor="#FF7DD3A6"
+                android:textSize="20sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/readex_regular"
+                android:text="الديون المستحقة"
+                android:textColor="#FF9AA3B5"
+                android:textSize="11.5sp" />
+            <TextView
+                android:id="@+id/w_debts"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:fontFamily="@font/readex_bold"
+                android:textColor="#FFE9C46A"
+                android:textSize="20sp" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/w_sale"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1.3"
+            android:background="@drawable/widget_btn"
+            android:fontFamily="@font/readex_semibold"
+            android:gravity="center"
+            android:text="بيع سريع"
+            android:textColor="#FF0E1322"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/w_voice"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_btn2"
+            android:fontFamily="@font/readex_medium"
+            android:gravity="center"
+            android:text="بالصوت"
+            android:textColor="#FFF3ECDC"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/w_open"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_btn2"
+            android:fontFamily="@font/readex_medium"
+            android:gravity="center"
+            android:text="الزبائن"
+            android:textColor="#FFF3ECDC"
+            android:textSize="14sp" />
+    </LinearLayout>
+</LinearLayout>

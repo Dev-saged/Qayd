@@ -19,6 +19,7 @@ class MainActivity : FragmentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         ThemePref.load(this)
+        intent?.getStringExtra("launch")?.let { dev.saged.qayd.system.QaydWidget.launch.value = it }
         setContent {
             val dark = when (ThemePref.mode.value) {
                 ThemePref.Mode.System -> isSystemInDarkTheme()
@@ -31,5 +32,10 @@ class MainActivity : FragmentActivity() {
             }
             QaydTheme(dark) { AppRoot() }
         }
+    }
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        intent.getStringExtra("launch")?.let { dev.saged.qayd.system.QaydWidget.launch.value = it }
     }
 }

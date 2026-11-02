@@ -37,6 +37,9 @@
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
 
+    <!-- الإدخال بالصوت -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
     <!-- الطابعة الحرارية -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
@@ -52,6 +55,13 @@
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
+    <!-- خدمة التعرّف على الكلام في الجوال -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="true"
         android:icon="@mipmap/ic_launcher"
@@ -64,6 +74,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -74,6 +85,12 @@
         <receiver android:name=".notify.PsAlarmReceiver" android:exported="false" />
         <receiver android:name=".system.InstallReceiver" android:exported="false" />
         <receiver android:name=".notify.SmsScheduleReceiver" android:exported="false" />
+        <receiver android:name=".system.QaydWidget" android:exported="false" android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_qayd_info" />
+        </receiver>
 
         <provider
             android:name="androidx.core.content.FileProvider"

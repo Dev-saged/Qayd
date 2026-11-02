@@ -14,7 +14,7 @@ import androidx.core.content.ContextCompat
 
 /** صلاحيات قيد: التشغيلية تُطلب دفعة واحدة، والخاصة تفتح إعداداتها. */
 object Perms {
-    enum class Key { Notify, Sms, Phone, Storage, Battery, Install, Alarms }
+    enum class Key { Notify, Sms, Phone, Mic, Storage, Battery, Install, Alarms }
 
     private const val PREFS = "qayd_perms"
     /** فتح شاشة الصلاحيات من أي مكان (مثل "المزيد"). */
@@ -27,6 +27,7 @@ object Perms {
         Key.Notify -> if (Build.VERSION.SDK_INT >= 33) listOf(Manifest.permission.POST_NOTIFICATIONS) else emptyList()
         Key.Sms -> listOf(Manifest.permission.SEND_SMS)
         Key.Phone -> listOf(Manifest.permission.READ_PHONE_STATE)
+        Key.Mic -> listOf(Manifest.permission.RECORD_AUDIO)
         Key.Storage -> if (Build.VERSION.SDK_INT < 29) listOf(Manifest.permission.WRITE_EXTERNAL_STORAGE) else emptyList()
         else -> emptyList()
     }

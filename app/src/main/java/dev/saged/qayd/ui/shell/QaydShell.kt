@@ -123,6 +123,7 @@ private sealed interface Page {
     data object Holds : Page
     data object Transfers : Page
     data object CashClose : Page
+    data object Voice : Page
 }
 
 /** تنقل صفحات "المزيد". */
@@ -143,6 +144,8 @@ class MoreNav(
     val transfers: (() -> Unit)? = null,
     val pendingTransfers: Int = 0,
     val cashClose: (() -> Unit)? = null,
+    val voice: (() -> Unit)? = null,
+    val voiceCount: Int = 0,
 )
 
 @Composable
@@ -199,6 +202,18 @@ fun QaydShell(
     var psDebt by remember { mutableStateOf<PsSlot?>(null) }
     var pricesOpen by rememberSaveable { mutableStateOf(false) }
     var smsFor by remember { mutableStateOf<String?>(null) }
+    var recording by remember { mutableStateOf(false) }
+    val voiceOk = access.can(Perm.AddDebt) || access.can(Perm.AddPayment) || access.can(Perm.QuickSale)
+    val launch = dev.saged.qayd.system.QaydWidget.launch.value
+    androidx.compose.runtime.LaunchedEffect(launch) {
+        when (launch) {
+            "sale" -> if (access.can(Perm.QuickSale)) { page = null; tab = Tab.Home; pad = PadRequest.Sale }
+            "voice" -> if (voiceOk) recording = true
+            "customers" -> { page = null; tab = Tab.Customers }
+            "home" -> { page = null; tab = Tab.Home }
+        }
+        dev.saged.qayd.system.QaydWidget.launch.value = null
+    }
     var payerFor by remember { mutableStateOf<Pair<String, String>?>(null) }
     val payChips = listOf(PadChip("cash", "نقدي")) + wallets.map { PadChip(it, it) }
     var overLimit by remember { mutableStateOf<Pair<dev.saged.qayd.data.Customer, Double>?>(null) }
@@ -247,6 +262,10 @@ fun QaydShell(
                     Page.Audit -> AuditPage(pad0, audit, onBack = { page = null })
                     Page.Stock -> dev.saged.qayd.ui.stock.StockPage(
                         pad0, stock, suppliers.items.map { it.supplier }, access.can(Perm.ManageStock), access.can(Perm.QuickSale), stockActions, onBack = { page = null },
+                    )
+                    Page.Voice -> dev.saged.qayd.ui.voice.VoiceInboxPage(
+                        pad0, shop.id, ledger, access, actions.debt, actions.payment, actions.sale, actions.addCustomer,
+                        onRecord = { recording = true }, onBack = { page = null },
                     )
                     Page.Transfers -> dev.saged.qayd.ui.money.TransfersPage(
                         pad0, ledger, wallets, access.can(Perm.ConfirmTransfers), owner, actions.verifyTx, actions.saveWallets, onBack = { page = null },
@@ -318,6 +337,8 @@ fun QaydShell(
                                 reportsLocked = access.can(Perm.ViewReports) && !full.unlocked("reports", features),
                                 stock = { page = Page.Stock }.takeIf { Module.Inventory in shop.modules },
                                 orders = { page = Page.Orders }.takeIf { Module.Menu in shop.modules },
+                                voice = { page = Page.Voice }.takeIf { voiceOk },
+                                voiceCount = dev.saged.qayd.voice.VoiceInbox.items.value.count { it.shopId == shop.id },
                                 transfers = { page = Page.Transfers }.takeIf { access.can(Perm.ConfirmTransfers) || owner },
                                 pendingTransfers = ledger.allTx.count { it.wallet != null && it.verify == "pending" },
                                 cashClose = { page = Page.CashClose }.takeIf { access.can(Perm.QuickSale) || access.can(Perm.AddPayment) },
@@ -345,7 +366,7 @@ fun QaydShell(
                 TxKind.Expense -> pad = PadRequest.Expense()
                 else -> picking = k
             }
-        }) { newAction = false }
+        }, onDismiss = { newAction = false }, onVoice = { newAction = false; recording = true }.takeIf { voiceOk })
     }
 
     picking?.let { k ->
@@ -422,6 +443,8 @@ fun QaydShell(
         ) { v, _ -> actions.setPrice(r.key, v) }
         null -> Unit
     }
+
+    if (recording) dev.saged.qayd.ui.voice.VoiceRecordSheet(shop.id) { recording = false }
 
     payerFor?.let { (id, w) -> dev.saged.qayd.ui.money.PayerSheet(w, { n, ph -> if (n.isNotBlank() || ph.isNotBlank()) actions.setPayer(id, n, ph) }) { payerFor = null } }
 

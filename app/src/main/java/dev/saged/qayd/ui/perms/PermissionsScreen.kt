@@ -55,6 +55,7 @@ private fun meta(k: Key): Triple<ImageVector, String, String> = when (k) {
     Key.Notify -> Triple(QIcons.Bell, "الإشعارات", "تنبيه انتهاء وقت الشاشات وحالة جوال الإرسال")
     Key.Sms -> Triple(QIcons.Msg, "إرسال الرسائل", "ليعمل هذا الجوال جوال إرسال رسائل المحل")
     Key.Phone -> Triple(QIcons.Phone, "حالة الشريحة", "لمعرفة الشريحة والتغطية قبل الإرسال")
+    Key.Mic -> Triple(QIcons.Mic, "الميكروفون", "للإدخال بالصوت: سجّل وأنت مشغول وراجع لاحقاً")
     Key.Storage -> Triple(QIcons.Folder, "حفظ الملفات", "حفظ النسخ الاحتياطية والفواتير في مجلد ${BrandConfig.NAME_LATIN}")
     Key.Battery -> Triple(QIcons.Bolt, "العمل في الخلفية", "حتى لا يوقف النظام الإرسال والمنبهات")
     Key.Install -> Triple(QIcons.Sync, "تثبيت التحديثات", "ليثبّت التطبيق تحديثاته بنفسه")

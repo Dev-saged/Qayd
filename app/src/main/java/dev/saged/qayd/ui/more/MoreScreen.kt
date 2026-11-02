@@ -103,6 +103,7 @@ fun MoreScreen(
         Column(Modifier.entrance(2).fillMaxWidth().clip(shape).background(p.surface).border(1.dp, p.line, shape).padding(6.dp)) {
             nav.reports?.let { ActionRow(QIcons.Chart, "التقارير", "مبيعات الأسبوع، صافي الشهر، أكبر المدينين، وأداء الفريق", onClick = it) }
             nav.orders?.let { ActionRow(QIcons.Bowl, "الطلبات وقائمة الطعام", "طلب جديد، حالة الطلبات، الطباعة، وأصناف القائمة", onClick = it) }
+            nav.voice?.let { ActionRow(QIcons.Mic, "صندوق الصوت", "تسجيلات بانتظار المراجعة والتأكيد", badge = nav.voiceCount.takeIf { n -> n > 0 }?.toString(), onClick = it) }
             nav.transfers?.let { ActionRow(QIcons.Wallet, "التحويلات", "تأكيد وصول المبالغ المحوّلة بالمحافظ والبنوك", badge = nav.pendingTransfers.takeIf { n -> n > 0 }?.toString(), onClick = it) }
             nav.cashClose?.let { ActionRow(QIcons.Receipt, "إغلاق الصندوق", "عدّ الدرج آخر اليوم ومطابقته مع نقد حركاتك", onClick = it) }
             nav.holds?.let { ActionRow(QIcons.Calendar, "العربون والحجز", "زبون يحجز بعربون ويستلم عند الإكمال", onClick = it) }
