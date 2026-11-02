@@ -52,6 +52,8 @@ object QIcons {
     val Scan = icon("scan", "M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3" to W, "M8 8v8M11 8v8M14 8v8M17 8v8" to 1.4f)
     val Box = icon("box", "M12 3l8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9" to W)
     val Truck = icon("truck", "M3 6h11v10H3zM14 9.5h4l3 3.5v3h-7" to W, "M8.5 18a1.8 1.8 0 1 1-3.6 0a1.8 1.8 0 1 1 3.6 0M18.5 18a1.8 1.8 0 1 1-3.6 0a1.8 1.8 0 1 1 3.6 0" to W)
+    val Printer = icon("printer", "M7 8V3h10v5M7 17H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M7 14h10v7H7z" to W)
+    val Bowl = icon("bowl", "M3 11h18a9 9 0 0 1-18 0zM8 7c0-1.5 1-1.5 1-3M12 7c0-1.5 1-1.5 1-3M16 7c0-1.5 1-1.5 1-3" to W)
     val Check = icon("check", "M5 12.5l4.5 4.5L19 7.5" to 2.2f)
     val Folder = icon("folder", "M3.5 7a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z" to W)
     val Sun = icon("sun", "M16 12a4 4 0 1 1-8 0a4 4 0 1 1 8 0" to W, "M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4" to W)

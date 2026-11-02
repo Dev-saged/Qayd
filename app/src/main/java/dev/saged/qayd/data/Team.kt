@@ -20,6 +20,7 @@ enum class Perm(val key: String, val label: String, val group: String) {
     ManageTemplates("manageTemplates", "قوالب الرسائل", "الوحدات"),
     ManageStock("manageStock", "إدارة الأصناف والمخزون", "الوحدات"),
     ManageSuppliers("manageSuppliers", "الموردون وفواتير الشراء", "الوحدات"),
+    ManageMenu("manageMenu", "تعديل قائمة الطعام", "الوحدات"),
 }
 
 @Immutable

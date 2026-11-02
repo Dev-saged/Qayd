@@ -87,6 +87,8 @@ fun HomeScreen(
     locked: List<String> = emptyList(),
     lowStock: Int? = null,
     onStock: () -> Unit = {},
+    orders: Triple<Int, Int, Double>? = null,
+    onOrders: () -> Unit = {},
 ) {
     val haptic = LocalHapticFeedback.current
     val now by rememberNow()
@@ -118,6 +120,25 @@ fun HomeScreen(
             PsGrid(slots, now, Modifier.entrance(4)) {
                 haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                 onPs(it)
+            }
+        }
+
+        orders?.let { (n, preparing, total) ->
+            val p = dev.saged.qayd.ui.theme.LocalPalette.current
+            val shape = androidx.compose.foundation.shape.RoundedCornerShape(22.dp)
+            Row(
+                Modifier.fillMaxWidth().clip(shape).background(p.surface).border(1.dp, p.pri.copy(alpha = .4f), shape)
+                    .clickable(role = Role.Button, onClick = onOrders).padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(Modifier.size(46.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(15.dp)).background(p.pri.copy(alpha = .15f)), contentAlignment = Alignment.Center) {
+                    dev.saged.qayd.ui.components.QIcon(dev.saged.qayd.ui.icons.QIcons.Bowl, p.pri, Modifier.size(24.dp))
+                }
+                Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
+                    T("الطلبات", size = 16.sp, weight = FontWeight.SemiBold)
+                    T("$n طلب اليوم · $preparing قيد التحضير · ${cur(total)}", Modifier.padding(top = 3.dp), 12.5.sp, color = p.mute)
+                }
+                T("طلب جديد", size = 13.sp, weight = FontWeight.SemiBold, color = p.pri)
             }
         }
 

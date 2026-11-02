@@ -9,7 +9,7 @@ enum class Role(val label: String) {
 }
 
 /** مميزات يحددها مالك المنصة مجانية أو مدفوعة (الوحدات + كشف PDF + التقارير). */
-val FEATURES = listOf("ps" to "شاشات PlayStation", "electricity" to "الكهرباء", "sms" to "الرسائل", "pdf" to "كشف الحساب PDF", "reports" to "التقارير", "autoBackup" to "النسخ الاحتياطي التلقائي", "inventory" to "الأصناف والمخزون", "suppliers" to "الموردون")
+val FEATURES = listOf("ps" to "شاشات PlayStation", "electricity" to "الكهرباء", "sms" to "الرسائل", "pdf" to "كشف الحساب PDF", "reports" to "التقارير", "autoBackup" to "النسخ الاحتياطي التلقائي", "inventory" to "الأصناف والمخزون", "suppliers" to "الموردون", "menu" to "قائمة الطعام والطلبات")
 
 enum class Module(val key: String, val label: String) {
     Debts("debts", "الديون"),
@@ -18,6 +18,7 @@ enum class Module(val key: String, val label: String) {
     Sms("sms", "الرسائل"),
     Inventory("inventory", "الأصناف والمخزون"),
     Suppliers("suppliers", "الموردون"),
+    Menu("menu", "قائمة الطعام والطلبات"),
 }
 
 enum class SyncState(val label: String) {

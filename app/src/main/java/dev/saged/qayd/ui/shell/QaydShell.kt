@@ -119,6 +119,7 @@ private sealed interface Page {
     data object Reports : Page
     data object Stock : Page
     data object Suppliers : Page
+    data object Orders : Page
 }
 
 /** تنقل صفحات "المزيد". */
@@ -134,6 +135,7 @@ class MoreNav(
     val stock: (() -> Unit)? = null,
     val suppliers: (() -> Unit)? = null,
     val lockedModules: List<String> = emptyList(),
+    val orders: (() -> Unit)? = null,
 )
 
 @Composable
@@ -157,6 +159,9 @@ fun QaydShell(
     stock: dev.saged.qayd.data.StockState = dev.saged.qayd.data.StockState.Empty,
     suppliers: dev.saged.qayd.data.SupplierState = dev.saged.qayd.data.SupplierState.Empty,
     stockActions: dev.saged.qayd.ui.stock.StockActions = dev.saged.qayd.ui.stock.StockActions.None,
+    menu: List<dev.saged.qayd.data.MenuItem> = emptyList(),
+    orders: List<dev.saged.qayd.data.Order> = emptyList(),
+    orderActions: dev.saged.qayd.ui.orders.OrderActions = dev.saged.qayd.ui.orders.OrderActions.None,
     more: @Composable (PaddingValues, MoreNav) -> Unit,
 ) = androidx.compose.runtime.CompositionLocalProvider(
     dev.saged.qayd.ui.components.LocalQuickAdds provides dev.saged.qayd.data.BizType.of(shop.type).quickAdds,
@@ -223,6 +228,9 @@ fun QaydShell(
                     Page.Stock -> dev.saged.qayd.ui.stock.StockPage(
                         pad0, stock, suppliers.items.map { it.supplier }, access.can(Perm.ManageStock), access.can(Perm.QuickSale), stockActions, onBack = { page = null },
                     )
+                    Page.Orders -> dev.saged.qayd.ui.orders.OrdersPage(
+                        pad0, shop.name, menu, orders, access.can(Perm.ManageMenu), access.can(Perm.DeleteTx), orderActions, onBack = { page = null },
+                    )
                     Page.Suppliers -> dev.saged.qayd.ui.suppliers.SuppliersPage(pad0, suppliers, access.can(Perm.ManageSuppliers), stockActions, onBack = { page = null })
                     Page.Reports -> ReportsPage(pad0, ledger.report(System.currentTimeMillis()), onBack = { page = null })
                     Page.Templates -> TemplatesPage(pad0, templates, onBack = { page = null }, onSave = actions.saveTemplate, onDelete = actions.deleteTemplate)
@@ -246,6 +254,11 @@ fun QaydShell(
                             onPower = { page = Page.Power },
                             lowStock = stock.lowCount.takeIf { Module.Inventory in shop.modules },
                             onStock = { page = Page.Stock },
+                            orders = orders.takeIf { Module.Menu in shop.modules }?.let { o ->
+                                val t = o.filter { it.at >= dev.saged.qayd.data.Ledger.dayStart(System.currentTimeMillis()) && it.status != dev.saged.qayd.data.OrderStatus.Cancelled }
+                                Triple(t.size, t.count { it.status == dev.saged.qayd.data.OrderStatus.New }, t.sumOf { it.total })
+                            },
+                            onOrders = { page = Page.Orders },
                             locked = locked,
                         )
                         Tab.Customers -> CustomersScreen(
@@ -276,8 +289,9 @@ fun QaydShell(
                                 backup = actions.backup.takeIf { owner },
                                 reportsLocked = access.can(Perm.ViewReports) && !full.unlocked("reports", features),
                                 stock = { page = Page.Stock }.takeIf { Module.Inventory in shop.modules },
+                                orders = { page = Page.Orders }.takeIf { Module.Menu in shop.modules },
                                 suppliers = { page = Page.Suppliers }.takeIf { Module.Suppliers in shop.modules },
-                                lockedModules = listOf(Module.Inventory, Module.Suppliers).filter { it in full.modules && it !in shop.modules }.map { it.label },
+                                lockedModules = listOf(Module.Inventory, Module.Suppliers, Module.Menu).filter { it in full.modules && it !in shop.modules }.map { it.label },
                                 prices = { pricesOpen = true }.takeIf {
                                     access.can(Perm.SetPrices) && (Module.Ps in shop.modules || Module.Electricity in shop.modules)
                                 },

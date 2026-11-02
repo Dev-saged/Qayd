@@ -57,6 +57,7 @@ import dev.saged.qayd.data.Gateway
 import dev.saged.qayd.gateway.GatewayService
 import dev.saged.qayd.notify.PsAlarms
 import dev.saged.qayd.data.Account
+import dev.saged.qayd.data.nextNo
 import dev.saged.qayd.data.Ledger
 import dev.saged.qayd.data.TxKind
 import dev.saged.qayd.ui.components.rememberNow
@@ -192,6 +193,29 @@ private fun ShopRoot(vm: AppViewModel, account: Account) {
             val supplierList by remember(shop.id) { vm.repo.suppliers(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val stx by remember(shop.id) { vm.repo.stx(shop.id) }.collectAsStateWithLifecycle(emptyList())
             val suppliers = remember(supplierList, stx) { dev.saged.qayd.data.SupplierState.of(supplierList, stx) }
+            val menu by remember(shop.id) { vm.repo.menu(shop.id) }.collectAsStateWithLifecycle(emptyList())
+            val orders by remember(shop.id) { vm.repo.orders(shop.id) }.collectAsStateWithLifecycle(emptyList())
+            val orderActions = remember(shop.id, orders, ledger, shop.modules) {
+                val r = vm.repo
+                val id = shop.id
+                dev.saged.qayd.ui.orders.OrderActions(
+                    add = { o ->
+                        val no = orders.nextNo()
+                        r.addOrder(id, no, o)
+                        dev.saged.qayd.data.Order("", no, o.lines, o.type, dev.saged.qayd.data.OrderStatus.New, o.table, o.phone, o.address, o.note, System.currentTimeMillis(), account.displayName)
+                    },
+                    status = { o, s -> r.setOrderStatus(id, o.id, s) },
+                    cancel = { o ->
+                        r.setOrderStatus(id, o.id, dev.saged.qayd.data.OrderStatus.Cancelled)
+                        ledger.allTx.firstOrNull { it.id == o.txId }?.let { t -> r.deleteTx(id, t, "طلب #${o.no}") }
+                    },
+                    saveItem = { mid, n, pr, c, a -> r.saveMenuItem(id, mid, n, pr, c, a) },
+                    deleteItem = { r.deleteMenuItem(id, it) },
+                    notify = if (Module.Sms in shop.modules) ({ o ->
+                        r.enqueueSms(id, listOf(Triple(o.phone, "", "مرحباً، طلبك رقم ${o.no} من ${shop.name} في الطريق إليك.")), "توصيل")
+                    }) else null,
+                )
+            }
             val stockActions = remember(shop.id) {
                 val r = vm.repo
                 val id = shop.id
@@ -224,7 +248,7 @@ private fun ShopRoot(vm: AppViewModel, account: Account) {
             val me = members.firstOrNull { it.uid == account.uid }
             val access = if (account.role == Role.Owner) Access.Full else Access(Role.Staff, me?.perms.orEmpty(), me?.active ?: true)
             if (!access.active) return Blocked("حسابك موقوف من صاحب المحل", vm::signOut)
-            QaydShell(shop, account, current.second, ledger, slots, actions, access, members, audit, prices, power, gateway, queue, templates, features, smsUsed, stock, suppliers, stockActions) { pad, nav ->
+            QaydShell(shop, account, current.second, ledger, slots, actions, access, members, audit, prices, power, gateway, queue, templates, features, smsUsed, stock, suppliers, stockActions, menu, orders, orderActions) { pad, nav ->
                 MoreScreen(
                     padding = pad, shop = shop, account = account, sync = current.second, op = op,
                     onRename = { vm.repo.renameShop(shop.id, it) },

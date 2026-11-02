@@ -5,7 +5,7 @@ enum class BizType(val key: String, val label: String, val modules: Set<Module>,
     General("general", "عام", setOf(Module.Debts, Module.Sms), listOf(5, 10, 20, 50)),
     Grocery("grocery", "بقالة وسوبرماركت", setOf(Module.Debts, Module.Inventory, Module.Suppliers, Module.Sms), listOf(1, 5, 10, 20)),
     Clothing("clothing", "ملابس وأحذية", setOf(Module.Debts, Module.Inventory, Module.Suppliers, Module.Sms), listOf(20, 50, 100, 200)),
-    Food("food", "مطعم، مشاوي، فلافل", setOf(Module.Debts, Module.Suppliers, Module.Sms), listOf(5, 10, 15, 20)),
+    Food("food", "مطعم، مشاوي، فلافل", setOf(Module.Debts, Module.Menu, Module.Suppliers, Module.Sms), listOf(5, 10, 15, 20)),
     Household("household", "أدوات منزلية", setOf(Module.Debts, Module.Inventory, Module.Suppliers, Module.Sms), listOf(10, 20, 50, 100)),
     Games("games", "صالة ألعاب وكهرباء", setOf(Module.Debts, Module.Ps, Module.Electricity, Module.Sms), listOf(5, 10, 20, 50));
 

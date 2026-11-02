@@ -136,6 +136,18 @@ service cloud.firestore {
         allow update: if can(shopId, 'manageSuppliers') && onlyChanges(['deleted', 'updatedAt']);
       }
 
+      match /menu/{id} {
+        allow read: if member(shopId);
+        allow write: if can(shopId, 'manageMenu') && featureOn(shopId, 'menu');
+      }
+
+      match /orders/{id} {
+        allow read: if member(shopId);
+        allow create: if byMe() && can(shopId, 'quickSale') && featureOn(shopId, 'menu');
+        allow update: if (can(shopId, 'quickSale') && onlyChanges(['status', 'updatedAt']) && request.resource.data.status != 'cancelled')
+          || (can(shopId, 'deleteTx') && onlyChanges(['status', 'updatedAt']));
+      }
+
       match /usage/{doc} {
         allow read: if member(shopId);
         allow create, update: if can(shopId, 'sendSms') && featureOn(shopId, 'sms')

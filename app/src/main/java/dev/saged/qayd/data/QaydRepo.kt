@@ -602,4 +602,61 @@ class QaydRepo(context: Context) {
             "supplierId" to supplierId, "kind" to kind.key, "amount" to round2(amount), "note" to note.trim(), "at" to Timestamp(java.util.Date()),
         ))
     }
+
+    /* ---------- قائمة الطعام والطلبات ---------- */
+
+    fun menu(shopId: String): Flow<List<MenuItem>> = listen("shops/$shopId/menu") {
+        MenuItem(it.id, it.getString("name").orEmpty(), it.getDouble("price") ?: 0.0, it.getString("category").orEmpty(), it.getBoolean("active") != false)
+    }
+
+    fun saveMenuItem(shopId: String, id: String?, name: String, price: Double, category: String, active: Boolean) {
+        val data = mapOf("name" to name.trim(), "price" to round2(price), "category" to category.trim(), "active" to active)
+        if (id == null) db.collection("shops/$shopId/menu").document().set(stamp() + data)
+        else db.document("shops/$shopId/menu/$id").update(data + ("updatedAt" to FieldValue.serverTimestamp()))
+    }
+
+    fun deleteMenuItem(shopId: String, id: String) {
+        db.document("shops/$shopId/menu/$id").update(mapOf("deleted" to true, "updatedAt" to FieldValue.serverTimestamp()))
+    }
+
+    /** الطلبات من بداية الأمس فقط، فالقائمة خفيفة دائماً. */
+    fun orders(shopId: String): Flow<List<Order>> = callbackFlow {
+        val since = Timestamp(java.util.Date(Ledger.dayStart(System.currentTimeMillis()) - 86_400_000L))
+        val reg = db.collection("shops/$shopId/orders").whereGreaterThanOrEqualTo("at", since)
+            .addSnapshotListener(MetadataChanges.INCLUDE) { s, e ->
+                if (e != null || s == null) return@addSnapshotListener
+                trySend(s.documents.map { d ->
+                    Order(
+                        d.id, (d.getLong("no") ?: 0L).toInt(),
+                        (d.get("lines") as? List<*>).orEmpty().mapNotNull { l ->
+                            (l as? Map<*, *>)?.let { OrderLine(it["name"]?.toString().orEmpty(), (it["price"] as? Number)?.toDouble() ?: 0.0, (it["qty"] as? Number)?.toInt() ?: 1) }
+                        },
+                        OrderType.of(d.getString("type")), OrderStatus.of(d.getString("status")),
+                        d.getString("table").orEmpty(), d.getString("phone").orEmpty(), d.getString("address").orEmpty(), d.getString("note").orEmpty(),
+                        d.millis("at"), d.getString("byName").orEmpty(), d.getString("txId").orEmpty(),
+                    )
+                })
+            }
+        awaitClose { reg.remove() }
+    }
+
+    /** الطلب يُسجَّل بيعاً في الدفتر بنفس العملية. */
+    fun addOrder(shopId: String, no: Int, o: NewOrder) {
+        val batch = db.batch()
+        val now = Timestamp(java.util.Date())
+        val ref = db.collection("shops/$shopId/orders").document()
+        val tx = db.collection("shops/$shopId/tx").document()
+        val total = round2(o.lines.sumOf { it.price * it.qty })
+        batch.set(ref, stamp() + mapOf(
+            "no" to no, "lines" to o.lines.map { mapOf("name" to it.name, "price" to it.price, "qty" to it.qty) },
+            "type" to o.type.key, "status" to OrderStatus.New.key, "table" to o.table.trim(), "phone" to o.phone.trim(),
+            "address" to o.address.trim(), "note" to o.note.trim(), "total" to total, "txId" to tx.id, "at" to now,
+        ))
+        batch.set(tx, stamp() + mapOf("kind" to TxKind.Sale.key, "amount" to total, "at" to now, "source" to "order", "ref" to "طلب #$no"))
+        batch.commit()
+    }
+
+    fun setOrderStatus(shopId: String, id: String, status: OrderStatus) {
+        db.document("shops/$shopId/orders/$id").update(mapOf("status" to status.key, "updatedAt" to FieldValue.serverTimestamp()))
+    }
 }
