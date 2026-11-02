@@ -76,7 +76,7 @@ fun AdminScreen(
     onSignOut: () -> Unit,
     features: Map<String, String> = emptyMap(),
     onFeature: (String, Boolean) -> Unit = { _, _ -> },
-    onSaveShop: (Shop, Set<Module>, Int, Set<String>, Long?, String, Int) -> Unit = { _, _, _, _, _, _, _ -> },
+    onSaveShop: (Shop, Set<Module>, Int, Set<String>, Long?, String, Int, String) -> Unit = { _, _, _, _, _, _, _, _ -> },
 ) {
     val p = LocalPalette.current
     var creating by rememberSaveable { mutableStateOf(false) }
@@ -145,7 +145,7 @@ fun AdminScreen(
     }
 
     if (creating) CreateShopSheet(op, onCreate) { creating = false; onClearOp() }
-    editing?.let { s -> EditShopSheet(s, features, { m, n, paid, lic, name, quota -> onSaveShop(s, m, n, paid, lic, name, quota); editing = null }) { editing = null } }
+    editing?.let { s -> EditShopSheet(s, features, { m, n, paid, lic, name, quota, type -> onSaveShop(s, m, n, paid, lic, name, quota, type); editing = null }) { editing = null } }
     if (featuresOpen) {
         QSheet("المميزات: مجانية أم مدفوعة", { featuresOpen = false }) {
             T("الميزة المدفوعة تُقفل عند كل محل لم تفعّلها له، ويظهر له زر التواصل معك.", size = 12.5.sp, color = p.mute, maxLines = 2)
@@ -158,7 +158,7 @@ fun AdminScreen(
 private fun EditShopSheet(
     s: Shop,
     features: Map<String, String>,
-    onSave: (Set<Module>, Int, Set<String>, Long?, String, Int) -> Unit,
+    onSave: (Set<Module>, Int, Set<String>, Long?, String, Int, String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val p = LocalPalette.current
@@ -169,10 +169,13 @@ private fun EditShopSheet(
     var until by rememberSaveable(s.id) { mutableStateOf(s.licenseUntil) }
     var quota by rememberSaveable(s.id) { mutableStateOf(if (s.smsQuota >= 0) s.smsQuota.toString() else "50") }
     var unlimited by rememberSaveable(s.id) { mutableStateOf(s.smsQuota < 0) }
+    var type by rememberSaveable(s.id) { mutableStateOf(s.type) }
     val day = 86_400_000L
     QSheet("تعديل ${s.name}", onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             QField(name, { name = it }, "اسم المحل")
+            T("نوع النشاط", Modifier.padding(top = 6.dp), 14.sp, FontWeight.SemiBold)
+            BizPicker(type) { t -> type = t.key }
             T("الوحدات", Modifier.padding(top = 6.dp), 14.sp, FontWeight.SemiBold)
             Module.entries.forEach { m -> QSwitchRow(m.label, m.key in mods, { on -> mods = if (on) mods + m.key else mods - m.key }) }
             if (Module.Ps.key in mods) QStepper("عدد الشاشات", screens, 1..12) { screens = it }
@@ -203,7 +206,7 @@ private fun EditShopSheet(
             QButton("بدون تاريخ انتهاء", { until = null }, secondary = true)
             Spacer(Modifier.height(6.dp))
             QButton("حفظ", {
-                onSave(Module.entries.filter { it.key in mods }.toSet(), screens, paid, until, name.ifBlank { s.name }, if (unlimited) -1 else quota.toIntOrNull() ?: 0)
+                onSave(Module.entries.filter { it.key in mods }.toSet(), screens, paid, until, name.ifBlank { s.name }, if (unlimited) -1 else quota.toIntOrNull() ?: 0, type)
             })
         }
     }
@@ -265,6 +268,9 @@ private fun CreateShopSheet(op: Op, onCreate: (NewShop) -> Unit, onDismiss: () -
     var ps by rememberSaveable { mutableStateOf(false) }
     var power by rememberSaveable { mutableStateOf(false) }
     var sms by rememberSaveable { mutableStateOf(true) }
+    var inventory by rememberSaveable { mutableStateOf(false) }
+    var suppliersOn by rememberSaveable { mutableStateOf(false) }
+    var type by rememberSaveable { mutableStateOf(dev.saged.qayd.data.BizType.General.key) }
     var screens by rememberSaveable { mutableStateOf(3) }
     var tried by rememberSaveable { mutableStateOf(false) }
 
@@ -289,8 +295,16 @@ private fun CreateShopSheet(op: Op, onCreate: (NewShop) -> Unit, onDismiss: () -
                 error = errUser, enabled = !op.busy, suffix = if (suffix.isNotBlank()) "@$suffix" else null,
             )
             QField(ownerPass, { ownerPass = it }, "كلمة سر صاحب المحل", ltr = true, password = true, error = errPass, enabled = !op.busy)
+            T("نوع النشاط", Modifier.padding(top = 6.dp), 14.sp, FontWeight.SemiBold)
+            BizPicker(type) { t ->
+                type = t.key
+                debts = Module.Debts in t.modules; ps = Module.Ps in t.modules; power = Module.Electricity in t.modules
+                sms = Module.Sms in t.modules; inventory = Module.Inventory in t.modules; suppliersOn = Module.Suppliers in t.modules
+            }
             T("الوحدات", Modifier.padding(top = 6.dp), 14.sp, FontWeight.SemiBold)
             QSwitchRow(Module.Debts.label, debts, { debts = it })
+            QSwitchRow(Module.Inventory.label, inventory, { inventory = it })
+            QSwitchRow(Module.Suppliers.label, suppliersOn, { suppliersOn = it })
             QSwitchRow(Module.Ps.label, ps, { ps = it })
             if (ps) QStepper("عدد الشاشات", screens, 1..12) { screens = it }
             QSwitchRow(Module.Electricity.label, power, { power = it })
@@ -307,12 +321,33 @@ private fun CreateShopSheet(op: Op, onCreate: (NewShop) -> Unit, onDismiss: () -
                                 if (ps) add(Module.Ps)
                                 if (power) add(Module.Electricity)
                                 if (sms) add(Module.Sms)
+                                if (inventory) add(Module.Inventory)
+                                if (suppliersOn) add(Module.Suppliers)
                             },
                             screens,
+                            type,
                         ),
                     )
                 }
             }, busy = op.busy, busyText = "جارٍ الإنشاء…")
+        }
+    }
+}
+
+/** اختيار نوع النشاط: اختيار نوع جديد يجهّز وحداته، ويمكن تعديلها بعده. */
+@Composable
+private fun BizPicker(current: String, onPick: (dev.saged.qayd.data.BizType) -> Unit) {
+    val p = LocalPalette.current
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        dev.saged.qayd.data.BizType.entries.forEach { t ->
+            val on = t.key == current
+            T(
+                t.label,
+                Modifier.clip(RoundedCornerShape(12.dp)).background(if (on) p.pri.copy(alpha = .18f) else p.surface2)
+                    .border(1.dp, if (on) p.pri else Color.Transparent, RoundedCornerShape(12.dp))
+                    .clickable(role = Role.RadioButton) { onPick(t) }.padding(horizontal = 12.dp, vertical = 9.dp),
+                13.sp, if (on) FontWeight.SemiBold else FontWeight.Normal, if (on) p.pri else p.ink,
+            )
         }
     }
 }

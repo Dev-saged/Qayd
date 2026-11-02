@@ -46,6 +46,7 @@
 ## Changes
 - v0.1.0: shell + home (direction A), icon, CI, per-build releases.
 - v0.2.0: Firebase auth + offline session, super admin panel, staff creation, shop rename, sync chip, Worker + rules.
+- v1.4.0: data/Business (BizType presets + LocalQuickAdds), data/Stock (products + moves, derived qty), data/Suppliers (suppliers + stx), ui/stock (StockPage, scanner via zxing-android-embedded), ui/suppliers, Perm manageStock/manageSuppliers, rules products/moves/suppliers/stx, Worker MODULES+type.
 - v1.3.1: PermissionsScreen drawn as overlay in AppRoot (keeps navigation state, BackHandler), status-bar scrim (windowInsetsTopHeight statusBars).
 - v1.3.0: system/Updates (app-wide check/download state, release notes from assets/releases copied from docs/releases by gradle task releaseNotes), ui/updates (UpdateLayer sheet + download pill, UpdatesPage history), PaidSheet + ActionRow(locked, badge), MoreNav.reportsLocked.
 - v1.2.0: system/Perms + ui/perms/PermissionsScreen (first run + More, RestrictedSmsSheet), Updater installs via PackageInstaller session + system/InstallReceiver, system/QaydFiles (Downloads/Qayd/Backups|Invoices), pdf/QaydPdf redesigned (Reem Kufi in assets/fonts, drawn icons, no author) with bitmap preview for tests.

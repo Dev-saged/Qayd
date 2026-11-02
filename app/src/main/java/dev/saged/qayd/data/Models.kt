@@ -9,13 +9,15 @@ enum class Role(val label: String) {
 }
 
 /** مميزات يحددها مالك المنصة مجانية أو مدفوعة (الوحدات + كشف PDF + التقارير). */
-val FEATURES = listOf("ps" to "شاشات PlayStation", "electricity" to "الكهرباء", "sms" to "الرسائل", "pdf" to "كشف الحساب PDF", "reports" to "التقارير", "autoBackup" to "النسخ الاحتياطي التلقائي")
+val FEATURES = listOf("ps" to "شاشات PlayStation", "electricity" to "الكهرباء", "sms" to "الرسائل", "pdf" to "كشف الحساب PDF", "reports" to "التقارير", "autoBackup" to "النسخ الاحتياطي التلقائي", "inventory" to "الأصناف والمخزون", "suppliers" to "الموردون")
 
 enum class Module(val key: String, val label: String) {
     Debts("debts", "الديون"),
     Ps("ps", "شاشات PlayStation"),
     Electricity("electricity", "الكهرباء"),
     Sms("sms", "الرسائل"),
+    Inventory("inventory", "الأصناف والمخزون"),
+    Suppliers("suppliers", "الموردون"),
 }
 
 enum class SyncState(val label: String) {
@@ -45,6 +47,7 @@ data class Shop(
     val paid: Set<String> = emptySet(),
     /** حد رسائل الشهر، و-1 بلا حد. */
     val smsQuota: Int = -1,
+    val type: String = BizType.General.key,
 ) {
     fun smsLeft(used: Int): Int? = smsQuota.takeIf { it >= 0 }?.let { (it - used).coerceAtLeast(0) }
 
@@ -70,6 +73,7 @@ data class NewShop(
     val ownerPassword: String,
     val modules: Set<Module>,
     val psScreens: Int,
+    val type: String = BizType.General.key,
 )
 
 class QaydError(message: String) : Exception(message)

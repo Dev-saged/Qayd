@@ -4,11 +4,13 @@
 const SECURETOKEN_JWKS = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
 const SUFFIX_RE = /^[a-z0-9-]{2,30}\.[a-z]{2,10}$/;
 const USER_RE = /^[a-z0-9][a-z0-9._-]{1,31}$/;
-const MODULES = ['debts', 'ps', 'electricity', 'sms'];
+const MODULES = ['debts', 'ps', 'electricity', 'sms', 'inventory', 'suppliers'];
+const TYPES = ['general', 'grocery', 'clothing', 'food', 'household', 'games'];
 const STAFF_PERMS = {
   quickSale: true, addDebt: true, addPayment: true, manageCustomers: true, deleteTx: false,
   viewBalances: true, expenses: false, managePs: true, setPrices: false, recordReadings: true,
   manageElectricity: false, sendSms: true, manageTemplates: false, exportPdf: true, viewReports: false,
+  manageStock: false, manageSuppliers: false,
 };
 
 class Fail extends Error {
@@ -192,6 +194,7 @@ async function createShop(env, caller, body) {
       write(env, `suffixes/${suffix}`, { shopId }, true),
       write(env, `shops/${shopId}`, {
         name, suffix, active: true, licenseUntil: null, modules, psScreens, ownerUid: uid, currency: '₪',
+        type: TYPES.includes(body.type) ? body.type : 'general',
       }),
       write(env, `shops/${shopId}/members/${uid}`, {
         username: email, displayName: ownerName, role: 'owner', perms: {}, active: true,

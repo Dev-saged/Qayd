@@ -155,7 +155,7 @@ class QaydRepo(context: Context) {
         db.document("config/features").set(mapOf(key to if (paid) "paid" else "free"), SetOptions.merge())
     }
 
-    fun updateShop(id: String, modules: Set<Module>, psScreens: Int, paid: Set<String>, licenseUntil: Long?, name: String, smsQuota: Int) {
+    fun updateShop(id: String, modules: Set<Module>, psScreens: Int, paid: Set<String>, licenseUntil: Long?, name: String, smsQuota: Int, type: String) {
         db.document("shops/$id").update(
             mapOf(
                 "name" to name.trim(),
@@ -164,6 +164,7 @@ class QaydRepo(context: Context) {
                 "paid" to FEATURES.associate { it.first to (it.first in paid) },
                 "licenseUntil" to licenseUntil?.let { Timestamp(java.util.Date(it)) },
                 "smsQuota" to smsQuota,
+                "type" to type,
                 "updatedAt" to FieldValue.serverTimestamp(),
             ),
         )
@@ -191,6 +192,7 @@ class QaydRepo(context: Context) {
             psScreens = (getLong("psScreens") ?: 3L).toInt(),
             paid = (get("paid") as? Map<*, *>).orEmpty().filterValues { it == true }.keys.map { it.toString() }.toSet(),
             smsQuota = (getLong("smsQuota") ?: -1L).toInt(),
+            type = getString("type") ?: BizType.General.key,
         )
     }
 
@@ -467,7 +469,7 @@ class QaydRepo(context: Context) {
         val body = JSONObject()
             .put("name", s.name.trim()).put("suffix", s.suffix.trim().lowercase())
             .put("ownerName", s.ownerName.trim()).put("ownerUsername", s.ownerUsername.trim().lowercase())
-            .put("ownerPassword", s.ownerPassword).put("psScreens", s.psScreens)
+            .put("ownerPassword", s.ownerPassword).put("psScreens", s.psScreens).put("type", s.type)
             .put("modules", JSONObject().apply { Module.entries.forEach { put(it.key, it in s.modules) } })
         return admin("/v1/shops", body).getString("ownerEmail")
     }
@@ -505,5 +507,99 @@ class QaydRepo(context: Context) {
                 c.disconnect()
             }
         }
+    }
+
+    /* ---------- الأصناف والمخزون ---------- */
+
+    fun products(shopId: String): Flow<List<Product>> = listen("shops/$shopId/products") {
+        Product(
+            it.id, it.getString("name").orEmpty(), it.getString("barcode").orEmpty(), it.getString("unit") ?: "قطعة",
+            it.getDouble("cost") ?: 0.0, it.getDouble("price") ?: 0.0, it.getDouble("minStock") ?: 0.0,
+        )
+    }
+
+    fun moves(shopId: String): Flow<List<Move>> = listen("shops/$shopId/moves") {
+        val kind = MoveKind.of(it.getString("kind")) ?: return@listen null
+        Move(it.id, it.getString("productId").orEmpty(), kind, it.getDouble("qty") ?: 0.0, it.getDouble("cost") ?: 0.0, it.millis("at"), it.getString("byName").orEmpty())
+    }
+
+    private fun move(shopId: String, productId: String, kind: MoveKind, qty: Double, cost: Double, extra: Map<String, Any?> = emptyMap()) =
+        db.collection("shops/$shopId/moves").document() to stamp() + mapOf(
+            "productId" to productId, "kind" to kind.key, "qty" to round2(qty), "cost" to round2(cost),
+            "at" to Timestamp(java.util.Date()),
+        ) + extra
+
+    fun addProduct(shopId: String, n: NewProduct) {
+        val batch = db.batch()
+        val ref = db.collection("shops/$shopId/products").document()
+        batch.set(ref, stamp() + mapOf("name" to n.name.trim(), "barcode" to n.barcode.trim(), "unit" to n.unit, "cost" to round2(n.cost), "price" to round2(n.price), "minStock" to n.minStock))
+        if (n.qty > 0) move(shopId, ref.id, MoveKind.In, n.qty, n.cost).let { (d, m) -> batch.set(d, m) }
+        batch.commit()
+    }
+
+    fun editProduct(shopId: String, p: Product) {
+        db.document("shops/$shopId/products/${p.id}").update(
+            mapOf("name" to p.name.trim(), "barcode" to p.barcode.trim(), "unit" to p.unit, "cost" to round2(p.cost), "price" to round2(p.price), "minStock" to p.minStock, "updatedAt" to FieldValue.serverTimestamp()),
+        )
+    }
+
+    fun deleteProduct(shopId: String, p: Product) {
+        db.document("shops/$shopId/products/${p.id}").update(mapOf("deleted" to true, "updatedAt" to FieldValue.serverTimestamp()))
+        log(shopId, "حذف صنف", p.name, null)
+    }
+
+    /** بيع صنف: حركة بيع في الدفتر وخروج من المخزون بعملية واحدة. */
+    fun sellProduct(shopId: String, p: Product, qty: Double) {
+        val batch = db.batch()
+        val tx = db.collection("shops/$shopId/tx").document()
+        batch.set(tx, stamp() + mapOf(
+            "kind" to TxKind.Sale.key, "amount" to round2(qty * p.price), "at" to Timestamp(java.util.Date()),
+            "source" to "stock", "ref" to "${p.name} × ${dev.saged.qayd.ui.util.money(qty)}",
+        ))
+        move(shopId, p.id, MoveKind.Sale, -qty, p.cost, mapOf("txId" to tx.id)).let { (d, m) -> batch.set(d, m) }
+        batch.commit()
+    }
+
+    /** إدخال بضاعة، ومعها فاتورة شراء على المورد إن اختير. */
+    fun receiveStock(shopId: String, p: Product, qty: Double, cost: Double, supplierId: String?) {
+        val batch = db.batch()
+        move(shopId, p.id, MoveKind.In, qty, cost, mapOf("supplierId" to supplierId)).let { (d, m) -> batch.set(d, m) }
+        if (cost != p.cost && cost > 0) batch.update(db.document("shops/$shopId/products/${p.id}"), mapOf("cost" to round2(cost), "updatedAt" to FieldValue.serverTimestamp()))
+        if (supplierId != null && qty * cost > 0) {
+            batch.set(db.collection("shops/$shopId/stx").document(), stamp() + mapOf(
+                "supplierId" to supplierId, "kind" to STxKind.Purchase.key, "amount" to round2(qty * cost),
+                "note" to "${p.name} × ${dev.saged.qayd.ui.util.money(qty)}", "at" to Timestamp(java.util.Date()),
+            ))
+        }
+        batch.commit()
+    }
+
+    fun adjustStock(shopId: String, p: Product, current: Double, actual: Double) {
+        if (actual == current) return
+        move(shopId, p.id, MoveKind.Adjust, actual - current, p.cost).let { (d, m) -> d.set(m) }
+        log(shopId, "جرد صنف", "${p.name}: ${dev.saged.qayd.ui.util.money(current)} ← ${dev.saged.qayd.ui.util.money(actual)}", null)
+    }
+
+    /* ---------- الموردون ---------- */
+
+    fun suppliers(shopId: String): Flow<List<Supplier>> = listen("shops/$shopId/suppliers") {
+        Supplier(it.id, it.getString("name").orEmpty(), it.getString("phone").orEmpty())
+    }
+
+    fun stx(shopId: String): Flow<List<STx>> = listen("shops/$shopId/stx") {
+        val kind = STxKind.of(it.getString("kind")) ?: return@listen null
+        STx(it.id, it.getString("supplierId").orEmpty(), kind, it.getDouble("amount") ?: 0.0, it.millis("at"), it.getString("note").orEmpty(), it.getString("byName").orEmpty())
+    }
+
+    fun addSupplier(shopId: String, name: String, phone: String): String {
+        val ref = db.collection("shops/$shopId/suppliers").document()
+        ref.set(stamp() + mapOf("name" to name.trim(), "phone" to phone.trim()))
+        return ref.id
+    }
+
+    fun addSupplierTx(shopId: String, supplierId: String, kind: STxKind, amount: Double, note: String) {
+        db.collection("shops/$shopId/stx").document().set(stamp() + mapOf(
+            "supplierId" to supplierId, "kind" to kind.key, "amount" to round2(amount), "note" to note.trim(), "at" to Timestamp(java.util.Date()),
+        ))
     }
 }

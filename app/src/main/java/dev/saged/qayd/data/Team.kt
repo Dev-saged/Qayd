@@ -18,6 +18,8 @@ enum class Perm(val key: String, val label: String, val group: String) {
     ManageElectricity("manageElectricity", "إدارة مشتركي الكهرباء", "الوحدات"),
     SendSms("sendSms", "إرسال الرسائل", "الوحدات"),
     ManageTemplates("manageTemplates", "قوالب الرسائل", "الوحدات"),
+    ManageStock("manageStock", "إدارة الأصناف والمخزون", "الوحدات"),
+    ManageSuppliers("manageSuppliers", "الموردون وفواتير الشراء", "الوحدات"),
 }
 
 @Immutable

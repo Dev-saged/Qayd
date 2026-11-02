@@ -45,6 +45,9 @@ import java.util.Locale
 /** خيار يظهر فوق المبلغ (فئة مصروف مثلاً). */
 data class PadChip(val key: String, val label: String)
 
+/** أزرار الإضافة السريعة حسب نوع نشاط المحل. */
+val LocalQuickAdds = androidx.compose.runtime.staticCompositionLocalOf { BrandConfig.QUICK_ADDS }
+
 /** نمباد المبالغ داخل التطبيق: لا يفتح كيبورد الجوال أبداً. */
 @Composable
 fun NumpadBody(
@@ -101,7 +104,7 @@ fun NumpadBody(
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            BrandConfig.QUICK_ADDS.forEach { d ->
+            LocalQuickAdds.current.forEach { d ->
                 Key("+$d", Modifier.weight(1f), small = true) { tap(); text = AmountInput.add(text, d) }
             }
         }

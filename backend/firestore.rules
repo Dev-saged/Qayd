@@ -113,6 +113,29 @@ service cloud.firestore {
         allow update: if member(shopId) && onlyChanges(['status', 'error', 'sentAt', 'deliveredAt', 'attempts', 'gateway', 'updatedAt']);
       }
 
+      match /products/{id} {
+        allow read: if member(shopId);
+        allow write: if can(shopId, 'manageStock') && featureOn(shopId, 'inventory');
+      }
+
+      match /moves/{id} {
+        allow read: if member(shopId);
+        allow create: if byMe() && featureOn(shopId, 'inventory')
+          && (can(shopId, 'manageStock') || (request.resource.data.kind == 'sale' && can(shopId, 'quickSale')));
+      }
+
+      match /suppliers/{id} {
+        allow read: if member(shopId);
+        allow write: if can(shopId, 'manageSuppliers') && featureOn(shopId, 'suppliers');
+      }
+
+      match /stx/{id} {
+        allow read: if member(shopId);
+        allow create: if byMe() && featureOn(shopId, 'suppliers')
+          && (can(shopId, 'manageSuppliers') || (can(shopId, 'manageStock') && request.resource.data.kind == 'purchase'));
+        allow update: if can(shopId, 'manageSuppliers') && onlyChanges(['deleted', 'updatedAt']);
+      }
+
       match /usage/{doc} {
         allow read: if member(shopId);
         allow create, update: if can(shopId, 'sendSms') && featureOn(shopId, 'sms')

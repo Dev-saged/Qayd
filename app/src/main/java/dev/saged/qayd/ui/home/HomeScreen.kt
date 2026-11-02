@@ -85,6 +85,8 @@ fun HomeScreen(
     pendingReadings: Int = 0,
     onPower: () -> Unit = {},
     locked: List<String> = emptyList(),
+    lowStock: Int? = null,
+    onStock: () -> Unit = {},
 ) {
     val haptic = LocalHapticFeedback.current
     val now by rememberNow()
@@ -125,6 +127,8 @@ fun HomeScreen(
             MiniStat("متأخرون", ledger.late.toString(), Modifier.weight(1f))
             if (Module.Electricity in shop.modules) {
                 MiniStat("قراءات معلّقة", pendingReadings.toString(), Modifier.weight(1f).clickable(role = Role.Button, onClick = onPower))
+            } else if (lowStock != null) {
+                MiniStat("قارب على النفاد", lowStock.toString(), Modifier.weight(1f).clickable(role = Role.Button, onClick = onStock))
             } else {
                 MiniStat("الزبائن", ledger.customers.size.toString(), Modifier.weight(1f))
             }

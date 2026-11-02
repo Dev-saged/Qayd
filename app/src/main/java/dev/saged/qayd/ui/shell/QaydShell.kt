@@ -117,6 +117,8 @@ private sealed interface Page {
     data object Power : Page
     data object Templates : Page
     data object Reports : Page
+    data object Stock : Page
+    data object Suppliers : Page
 }
 
 /** تنقل صفحات "المزيد". */
@@ -129,6 +131,9 @@ class MoreNav(
     val reports: (() -> Unit)? = null,
     val backup: (() -> Unit)? = null,
     val reportsLocked: Boolean = false,
+    val stock: (() -> Unit)? = null,
+    val suppliers: (() -> Unit)? = null,
+    val lockedModules: List<String> = emptyList(),
 )
 
 @Composable
@@ -149,7 +154,12 @@ fun QaydShell(
     templates: List<Template> = emptyList(),
     features: Map<String, String> = emptyMap(),
     smsUsed: Int = 0,
+    stock: dev.saged.qayd.data.StockState = dev.saged.qayd.data.StockState.Empty,
+    suppliers: dev.saged.qayd.data.SupplierState = dev.saged.qayd.data.SupplierState.Empty,
+    stockActions: dev.saged.qayd.ui.stock.StockActions = dev.saged.qayd.ui.stock.StockActions.None,
     more: @Composable (PaddingValues, MoreNav) -> Unit,
+) = androidx.compose.runtime.CompositionLocalProvider(
+    dev.saged.qayd.ui.components.LocalQuickAdds provides dev.saged.qayd.data.BizType.of(shop.type).quickAdds,
 ) {
     val p = LocalPalette.current
     val full = shop
@@ -210,6 +220,10 @@ fun QaydShell(
                     }
                     Page.Team -> TeamPage(pad0, members, ledger, onBack = { page = null }, onAdd = { tab = Tab.More; page = null }, onSave = actions.updateMember)
                     Page.Audit -> AuditPage(pad0, audit, onBack = { page = null })
+                    Page.Stock -> dev.saged.qayd.ui.stock.StockPage(
+                        pad0, stock, suppliers.items.map { it.supplier }, access.can(Perm.ManageStock), access.can(Perm.QuickSale), stockActions, onBack = { page = null },
+                    )
+                    Page.Suppliers -> dev.saged.qayd.ui.suppliers.SuppliersPage(pad0, suppliers, access.can(Perm.ManageSuppliers), stockActions, onBack = { page = null })
                     Page.Reports -> ReportsPage(pad0, ledger.report(System.currentTimeMillis()), onBack = { page = null })
                     Page.Templates -> TemplatesPage(pad0, templates, onBack = { page = null }, onSave = actions.saveTemplate, onDelete = actions.deleteTemplate)
                     Page.Power -> PowerPage(
@@ -230,6 +244,8 @@ fun QaydShell(
                             onPs = { if (access.can(Perm.ManagePs)) psOpen = it },
                             pendingReadings = power.pending,
                             onPower = { page = Page.Power },
+                            lowStock = stock.lowCount.takeIf { Module.Inventory in shop.modules },
+                            onStock = { page = Page.Stock },
                             locked = locked,
                         )
                         Tab.Customers -> CustomersScreen(
@@ -259,6 +275,9 @@ fun QaydShell(
                                 reports = { page = Page.Reports }.takeIf { access.can(Perm.ViewReports) && full.unlocked("reports", features) },
                                 backup = actions.backup.takeIf { owner },
                                 reportsLocked = access.can(Perm.ViewReports) && !full.unlocked("reports", features),
+                                stock = { page = Page.Stock }.takeIf { Module.Inventory in shop.modules },
+                                suppliers = { page = Page.Suppliers }.takeIf { Module.Suppliers in shop.modules },
+                                lockedModules = listOf(Module.Inventory, Module.Suppliers).filter { it in full.modules && it !in shop.modules }.map { it.label },
                                 prices = { pricesOpen = true }.takeIf {
                                     access.can(Perm.SetPrices) && (Module.Ps in shop.modules || Module.Electricity in shop.modules)
                                 },
