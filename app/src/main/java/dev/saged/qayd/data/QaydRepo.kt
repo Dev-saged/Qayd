@@ -17,6 +17,7 @@ import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.SnapshotMetadata
 import dev.saged.qayd.ui.home.PsSlot
 import dev.saged.qayd.config.BrandConfig
+import dev.saged.qayd.system.AccountVault
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -42,9 +43,14 @@ class QaydRepo(context: Context) {
         fun get(c: Context): QaydRepo = instance ?: synchronized(this) { instance ?: QaydRepo(c.applicationContext).also { instance = it } }
     }
 
-    private val auth = FirebaseAuth.getInstance()
-    private val db = FirebaseFirestore.getInstance()
-    private val prefs = context.getSharedPreferences("qayd_session", Context.MODE_PRIVATE)
+    private val ctx = context.applicationContext
+    private var appName: String = AccountVault.DEFAULT
+    private val auth get() = FirebaseAuth.getInstance(AccountVault.app(ctx, appName))
+    private val db get() = FirebaseFirestore.getInstance(AccountVault.app(ctx, appName))
+    private val prefs get() = ctx.getSharedPreferences(AccountVault.sessionPrefs(appName), Context.MODE_PRIVATE)
+
+    /** Firestore الحساب النشط، تستخدمه الخدمات الخلفية. */
+    val firestore: FirebaseFirestore get() = db
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private val _account = MutableStateFlow<Account?>(null)
@@ -53,7 +59,9 @@ class QaydRepo(context: Context) {
     val ready: StateFlow<Boolean> = _ready
 
     init {
-        val u = auth.currentUser
+        AccountVault.tune(FirebaseFirestore.getInstance())
+        AccountVault.migrate(ctx)
+        val u = AccountVault.active(ctx)?.let { appName = it; auth.currentUser }
         _account.value = u?.let(::loadCached)
         _ready.value = true
         if (u != null) scope.launch { refreshClaims(u) }
@@ -63,15 +71,32 @@ class QaydRepo(context: Context) {
 
     suspend fun signIn(login: String, password: String) {
         val email = login.trim().lowercase()
+        val name = AccountVault.appName(ctx, email)
+        val a = FirebaseAuth.getInstance(AccountVault.app(ctx, name))
+        val kept = a.currentUser?.takeIf { it.email.equals(email, true) }
+        // حساب محفوظ على الجهاز: دخول فوري بدون إنترنت
+        if (kept != null && AccountVault.check(ctx, email, password)) {
+            appName = name
+            loadCached(kept)?.let { acc ->
+                AccountVault.setActive(ctx, name)
+                _account.value = acc
+                scope.launch { refreshClaims(kept) }
+                return
+            }
+        }
         try {
-            val u = auth.signInWithEmailAndPassword(email, password).await().user ?: throw QaydError("تعذر الدخول")
+            val u = a.signInWithEmailAndPassword(email, password).await().user ?: throw QaydError("تعذر الدخول")
             val claims = u.getIdToken(true).await().claims
+            appName = name
             val acc = accountOf(u, claims) ?: run {
-                auth.signOut()
+                a.signOut()
                 throw QaydError("هذا الحساب غير مرتبط بأي محل")
             }
+            AccountVault.remember(ctx, email, name, password)
+            AccountVault.setActive(ctx, name)
             save(acc)
             _account.value = acc
+            scope.launch { warm(acc) }
         } catch (e: QaydError) {
             throw e
         } catch (e: FirebaseAuthInvalidCredentialsException) {
@@ -79,25 +104,42 @@ class QaydRepo(context: Context) {
         } catch (e: FirebaseAuthInvalidUserException) {
             throw QaydError("اسم المستخدم أو كلمة السر غير صحيحة")
         } catch (e: FirebaseNetworkException) {
-            throw QaydError("أول دخول يحتاج اتصالاً بالإنترنت")
+            throw QaydError(if (kept != null) "كلمة السر غير صحيحة" else "أول دخول لهذا الحساب يحتاج اتصالاً بالإنترنت")
         } catch (e: FirebaseTooManyRequestsException) {
             throw QaydError("محاولات كثيرة، انتظر قليلاً ثم حاول")
         }
     }
 
+    /** خروج إلى شاشة الدخول مع إبقاء الحساب وبيانات محله محفوظة على الجهاز. */
     fun signOut() {
-        auth.signOut()
-        prefs.edit().clear().apply()
+        AccountVault.setActive(ctx, null)
         _account.value = null
+    }
+
+    /** حذف الحساب من الجهاز كلياً. */
+    fun forget(login: String) {
+        val email = login.trim().lowercase()
+        if (AccountVault.appName(ctx, email) == appName && _account.value != null) _account.value = null
+        AccountVault.forget(ctx, email)
+    }
+
+    /** تنزيل بيانات كل محلات الحساب للكاش حتى تعمل كاملة بدون إنترنت. */
+    private suspend fun warm(a: Account) {
+        val cols = listOf("customers", "tx", "recurring", "members", "settings", "ps", "readings", "products", "moves",
+            "suppliers", "stx", "menu", "orders", "holds", "closes", "templates", "smsQueue", "audit")
+        a.shopIds.forEach { id ->
+            runCatching { db.document("shops/$id").get().await() }
+            cols.forEach { c -> runCatching { db.collection("shops/$id/$c").get().await() } }
+        }
     }
 
     private suspend fun refreshClaims(u: FirebaseUser) {
         runCatching { u.getIdToken(true).await() }
             .onSuccess { r ->
                 val acc = accountOf(u, r.claims)
-                if (acc == null) signOut() else { save(acc); _account.value = acc }
+                if (acc == null) forget(u.email.orEmpty()) else { save(acc); _account.value = acc; warm(acc) }
             }
-            .onFailure { if (it is FirebaseAuthInvalidUserException) signOut() }
+            .onFailure { if (it is FirebaseAuthInvalidUserException) forget(u.email.orEmpty()) }
     }
 
     private fun accountOf(u: FirebaseUser, claims: Map<String, Any>): Account? {

@@ -17,7 +17,6 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.ListenerRegistration
 import com.google.firebase.firestore.SetOptions
 import dev.saged.qayd.MainActivity
@@ -37,7 +36,7 @@ import kotlinx.coroutines.launch
  */
 class GatewayService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-    private val db = FirebaseFirestore.getInstance()
+    private val db get() = dev.saged.qayd.data.QaydRepo.get(this).firestore
     private var reg: ListenerRegistration? = null
     private var shopId: String = ""
     private val inFlight = mutableSetOf<String>()

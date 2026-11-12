@@ -1,9 +1,10 @@
 # repo-map — قيد
 
-> v1.12.0 | أول ما تفتح: هذا الملف ثم `.claude/session-handoff.md`. لا تقرأ ملفاً كبيراً كاملاً: استخدم Grep على الاسم من "Quick index" ثم Read بنطاق أسطر.
+> v1.13.0 | أول ما تفتح: هذا الملف ثم `.claude/session-handoff.md`. لا تقرأ ملفاً كبيراً كاملاً: استخدم Grep على الاسم من "Quick index" ثم Read بنطاق أسطر.
 > الأكبر حجماً (لا تقرأه كاملاً): QaydRepo 1005، AdminScreen 677، QaydShell 632، MessagesScreen 499، AppRoot 478، OrdersPage 432، HomeScreen 421.
 
 ## Quick index (ميزة → ملف → ابحث بـ)
+- دخول بدون إنترنت/خزنة الحسابات → `system/AccountVault.kt` (FirebaseApp مستقل لكل بريد + كاش بلا حد + PBKDF2), `QaydRepo` (`signIn` offline, `forget`, `warm`, `firestore`)
 - حسابات/جلسة/كلايمز/تبديل محل → `data/QaydRepo.kt` (`switchShop`, `shopNames`, `signIn`), `ui/AppRoot.kt` (`AdminRoot`, `ShopRoot`), `ui/AppViewModel.kt`
 - دين/دفعة/خصم/رصيد مشتق/سقف → `data/Ledger.kt` (`Ledger.of`, `TxKind`, `Customer.limit`), `ui/customers/*`, `PadRequest` في `ui/shell/ShellSheets.kt`
 - طرق الدفع والتحويلات وإغلاق الصندوق → `data/Team.kt` (`CashClose`, `Ledger.cashToday`), `ui/money/MoneyPages.kt`, `QaydRepo` (`verifyTx`, `setPayer`, `wallets`)
@@ -73,6 +74,7 @@
 - CI publishes a Release per main build: tag vX.Y.Z-bN, notes = docs/releases/vX.Y.Z.md + commits since previous tag.
 
 ## Changes
+- v1.13.0: AccountVault (named FirebaseApp per email, unlimited persistent cache, offline password check), QaydRepo auth/db/prefs follow active account, signOut keeps session, forget removes it, warm() prefetches all shop collections; services use QaydRepo.firestore.
 - v0.1.0: shell + home (direction A), icon, CI, per-build releases.
 - v0.2.0: Firebase auth + offline session, super admin panel, staff creation, shop rename, sync chip, Worker + rules.
 - v1.12.0: claims.shops (extra shops), rules inShop checks shops list, Account.shopIds + switchShop (prefs current), Worker /v1/shops/link (+unlink), staff creation uses current shop, header shop switcher, admin LinkOwnerBox.

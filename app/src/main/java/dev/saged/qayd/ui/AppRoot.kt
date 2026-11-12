@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -146,12 +147,12 @@ private fun AppContent(vm: AppViewModel, session: Session) {
                 remember = rememberMe,
                 onRemember = { rememberMe = it; prefs.edit().putBoolean("on", it).apply() },
                 onQuick = { u -> SavedLogins.password(ctx, u)?.let { pw -> vm.signIn(u, pw) } ?: run { SavedLogins.remove(ctx, u); saved = SavedLogins.users(ctx) } },
-                onForget = { u -> SavedLogins.remove(ctx, u); saved = SavedLogins.users(ctx) },
+                onForget = { u -> SavedLogins.remove(ctx, u); vm.repo.forget(u); saved = SavedLogins.users(ctx) },
             )
         }
         is Session.Active -> when (s.account.role) {
-            Role.SuperAdmin -> AdminRoot(vm, s.account)
-            Role.Owner, Role.Staff -> ShopRoot(vm, s.account)
+            Role.SuperAdmin -> key(s.account.uid) { AdminRoot(vm, s.account) }
+            Role.Owner, Role.Staff -> key(s.account.uid) { ShopRoot(vm, s.account) }
         }
     }
 }

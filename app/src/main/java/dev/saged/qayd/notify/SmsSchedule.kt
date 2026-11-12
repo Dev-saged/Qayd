@@ -14,7 +14,6 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Source
 import dev.saged.qayd.MainActivity
 import dev.saged.qayd.R
@@ -91,7 +90,7 @@ object SmsSchedule {
         val month = Calendar.getInstance().let { "${it.get(Calendar.YEAR)}-${it.get(Calendar.MONTH)}" }
         val prefs = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         if (prefs.getString("done", "") == month) return
-        val db = FirebaseFirestore.getInstance()
+        val db = dev.saged.qayd.data.QaydRepo.get(c).firestore
         val s = db.document("shops/$shopId/settings/sms").get(Source.SERVER).await()
         if (s.getBoolean("reminderOn") != true || s.getString("gatewayDevice") != DeviceId.get(c)) return
         val shop = db.document("shops/$shopId").get().await().getString("name").orEmpty()
@@ -154,7 +153,7 @@ class GatewayCheck(c: Context, p: WorkerParameters) : CoroutineWorker(c, p) {
     override suspend fun doWork(): Result {
         val shopId = applicationContext.getSharedPreferences("qayd_sms_schedule", Context.MODE_PRIVATE).getString("shop", null) ?: return Result.success()
         runCatching {
-            val r = FirebaseFirestore.getInstance().document("shops/$shopId/gateway/request").get(Source.SERVER).await()
+            val r = dev.saged.qayd.data.QaydRepo.get(applicationContext).firestore.document("shops/$shopId/gateway/request").get(Source.SERVER).await()
             val at = r.getTimestamp("at")?.toDate()?.time ?: 0L
             val seen = applicationContext.getSharedPreferences("qayd_sms_schedule", Context.MODE_PRIVATE).getLong("seenReq", 0L)
             if (r.getString("status") == "pending" && at > seen && !GatewayService.isOn(applicationContext)) {
