@@ -804,7 +804,7 @@ class QaydRepo(context: Context) {
         else BattSale(
             it.id, it.getString("serial").orEmpty(), it.getString("model").orEmpty(), it.getString("name").orEmpty(), it.getString("phone").orEmpty(),
             it.getString("car").orEmpty(), it.getDouble("price") ?: 0.0, it.getDouble("credit") ?: 0.0, it.getDouble("oldKg") ?: 0.0,
-            (it.getLong("months") ?: 12L).toInt(), it.millis("at"), it.getString("productId"), it.getString("txId"),
+            (it.getLong("months") ?: 12L).toInt(), it.millis("at"), it.getString("productId"), it.getString("txId"), it.getDouble("cost") ?: 0.0,
         )
     }.map { l -> BatteryState(l.filterIsInstance<BattSale>(), l.filterIsInstance<ScrapOut>()) }
 
@@ -824,7 +824,7 @@ class QaydRepo(context: Context) {
         batch.set(ref, stamp() + mapOf(
             "kind" to "sale", "serial" to n.serial.trim(), "model" to n.model.trim(), "name" to n.name.trim(), "phone" to n.phone.trim(), "car" to n.car.trim(),
             "price" to round2(n.price), "credit" to round2(n.credit), "oldKg" to round2(n.oldKg), "months" to n.months,
-            "at" to Timestamp(java.util.Date()), "productId" to n.productId, "txId" to txId,
+            "at" to Timestamp(java.util.Date()), "productId" to n.productId, "txId" to txId, "cost" to round2(n.cost),
         ))
         n.productId?.let { pid -> move(shopId, pid, MoveKind.Sale, -1.0, n.cost, mapOf("batteryId" to ref.id)).let { (d, m) -> batch.set(d, m) } }
         batch.commit()

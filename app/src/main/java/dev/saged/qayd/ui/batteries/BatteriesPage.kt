@@ -87,7 +87,7 @@ fun BatteriesPage(padding: PaddingValues, shopId: String, stock: List<ProductSto
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf("مبيعات مسجلة" to state.sales.size.toString(), "كفالات تنتهي قريباً" to state.soon.toString(), "خردة بالمحل" to "${money(state.scrapKg)} كغ")
+                listOf("مبيعات مسجلة" to state.sales.size.toString(), "كفالات تنتهي قريباً" to state.soon.toString(), "ربح هذا الشهر" to cur(state.monthProfit()))
                     .forEach { (l, v) ->
                         Column(Modifier.weight(1f).clip(RoundedCornerShape(16.dp)).background(p.surface).border(1.dp, p.line, RoundedCornerShape(16.dp)).padding(12.dp)) {
                             T(l, size = 11.sp, color = p.mute)
@@ -169,11 +169,11 @@ private fun SaleSheet(s: BattSale, canDelete: Boolean, onDelete: () -> Unit, onD
     QSheet(s.model, onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             T(ltr(s.serial), size = 14.sp, weight = FontWeight.SemiBold)
-            listOf(
+            (listOf(
                 "الزبون" to s.name.ifBlank { "غير مسجل" }, "الجوال" to s.phone.ifBlank { "غير مسجل" }, "السيارة" to s.car.ifBlank { "غير مسجلة" },
                 "تاريخ البيع" to dayLabel(s.at), "الكفالة" to "${s.months} شهراً · تنتهي ${dayLabel(s.endAt)}",
                 "السعر" to cur(s.price), "قيمة القديمة" to if (s.credit > 0) "${cur(s.credit)} · ${money(s.oldKg)} كغ" else "لا استبدال", "المدفوع" to cur(s.net),
-            ).forEach { (l, v) -> Row { T(l, Modifier.weight(1f), 12.5.sp, color = p.mute); T(v, size = 13.sp) } }
+            ) + listOfNotNull(s.profit?.let { "الربح" to cur(it) })).forEach { (l, v) -> Row { T(l, Modifier.weight(1f), 12.5.sp, color = p.mute); T(v, size = 13.sp) } }
             WarrantyChip(s)
             Spacer(Modifier.height(6.dp))
             if (s.phone.isNotBlank()) QButton("تذكير بالكفالة عبر واتساب", {
