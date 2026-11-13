@@ -114,6 +114,7 @@ private fun Stat(label: String, value: String, modifier: Modifier) {
 private fun PermsSheet(m: Member, onSave: (Set<Perm>, Boolean) -> Unit, onDismiss: () -> Unit) {
     var perms by rememberSaveable(m.uid) { mutableStateOf(m.perms.map { it.key }.toSet()) }
     var active by rememberSaveable(m.uid) { mutableStateOf(m.active) }
+    val repo = dev.saged.qayd.data.QaydRepo.get(androidx.compose.ui.platform.LocalContext.current)
     QSheet(
         "صلاحيات ${m.displayName}", onDismiss,
         footer = {
@@ -123,6 +124,8 @@ private fun PermsSheet(m: Member, onSave: (Set<Perm>, Boolean) -> Unit, onDismis
         dev.saged.qayd.ui.components.QSwitchGroup(null, listOf(
             dev.saged.qayd.ui.components.SwitchItem("الحساب فعّال", active, { active = it }, if (active) "يدخل ويعمل حسب صلاحياته" else "موقوف: لا يستطيع الدخول"),
         ))
+        Spacer(Modifier.height(12.dp))
+        ResetPasswordPanel(m.username, m.uid) { repo.resetPassword(m.uid, it, true) }
         Perm.entries.groupBy { it.group }.forEach { (group, list) ->
             Spacer(Modifier.height(12.dp))
             dev.saged.qayd.ui.components.QSwitchGroup(group, list.map { pr ->

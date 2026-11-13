@@ -350,6 +350,24 @@ async function linkOwner(env, shopId, login, unlink) {
   return { uid: u.localId, shops: [claims.shopId, ...shops] };
 }
 
+/** يعيّن كلمة سر جديدة: المالك لأي حساب، وصاحب المحل لموظفي محلاته فقط. */
+async function resetPassword(env, caller, body) {
+  const password = String(body.password || '');
+  if (password.length < 8) throw new Fail(400, 'weak_password', 'كلمة السر 8 أحرف على الأقل');
+  const isSuper = caller.super_admin === true;
+  if (!isSuper && caller.role !== 'owner') throw new Fail(403, 'forbidden', 'صاحب المحل فقط يغيّر كلمات سر الموظفين');
+  const query = body.uid ? { localId: [clean(body.uid, 128)] } : { email: [clean(body.login, 80).toLowerCase()] };
+  const u = (await google(env, `${authBase(env)}/accounts:lookup`, 'POST', query)).users?.[0];
+  if (!u) throw new Fail(404, 'no_user', 'الحساب غير موجود');
+  const claims = JSON.parse(u.customAttributes || '{}');
+  if (!isSuper) {
+    const mine = new Set([caller.shopId, ...(caller.shops || [])]);
+    if (claims.role !== 'staff' || !mine.has(claims.shopId)) throw new Fail(403, 'forbidden', 'ليس من موظفي محلاتك');
+  }
+  await google(env, `${authBase(env)}/accounts:update`, 'POST', { localId: u.localId, password, validSince: String(Math.floor(Date.now() / 1000)) });
+  return { uid: u.localId, email: u.email };
+}
+
 function requireSuper(caller) {
   if (caller.super_admin !== true) throw new Fail(403, 'forbidden', 'هذه العملية لمالك المنصة فقط');
 }
@@ -422,6 +440,7 @@ export default {
       const body = await request.json().catch(() => ({}));
       if (pathname === '/v1/shops') return json(200, await createShop(env, caller, body));
       if (pathname === '/v1/staff') return json(200, await createStaff(env, caller, body));
+      if (pathname === '/v1/accounts/password') return json(200, await resetPassword(env, caller, body));
       if (pathname === '/v1/backups/list') { requireSuper(caller); return json(200, { items: await listBackups(env, clean(body.shopId, 40)) }); }
       if (pathname === '/v1/backups/get') {
         requireSuper(caller);

@@ -295,6 +295,7 @@ private fun EditShopSheet(
             QButton("عرض المحل للدعم (قراءة فقط)", onSupport, secondary = true)
             QButton("النسخ الاحتياطية على الخادم", { backupsOpen = true }, secondary = true)
             LinkOwnerBox(s, server)
+            ResetByLoginBox(s)
             Column(
                 Modifier.padding(top = 8.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.danger.copy(alpha = .08f))
                     .border(1.dp, p.danger.copy(alpha = .35f), RoundedCornerShape(18.dp)).padding(14.dp),
@@ -673,5 +674,21 @@ private fun LinkOwnerBox(s: Shop, server: ServerOps) {
                 }, Modifier.weight(1f), busy = busy && !unlink, secondary = unlink)
             }
         }
+    }
+}
+
+/** المالك يعيّن كلمة سر أي حساب بكتابة اسم دخوله الكامل. */
+@Composable
+private fun ResetByLoginBox(s: Shop) {
+    val p = LocalPalette.current
+    val repo = dev.saged.qayd.data.QaydRepo.get(androidx.compose.ui.platform.LocalContext.current)
+    var login by rememberSaveable(s.id) { mutableStateOf("") }
+    Column(
+        Modifier.padding(top = 4.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.surface2.copy(alpha = .55f))
+            .border(1.dp, p.line, RoundedCornerShape(18.dp)).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        QField(login, { login = it.trim().lowercase() }, "حساب المطلوب تغيير كلمة سره", hint = "ahmad@${s.suffix}", ltr = true)
+        if (login.isNotBlank()) dev.saged.qayd.ui.team.ResetPasswordPanel(login, login) { repo.resetPassword(login, it, false) }
     }
 }

@@ -595,6 +595,11 @@ class QaydRepo(context: Context) {
                 .put("shopId", _account.value?.shopId.orEmpty()),
         ).getString("email")
 
+    /** كلمة سر جديدة لحساب: بمعرّف العضو (uid) أو باسم الدخول الكامل. */
+    suspend fun resetPassword(target: String, password: String, byUid: Boolean) {
+        admin("/v1/accounts/password", JSONObject().put(if (byUid) "uid" else "login", target.trim()).put("password", password))
+    }
+
     private suspend fun admin(path: String, body: JSONObject): JSONObject =
         runCatching { JSONObject(adminRaw(path, body)) }.getOrElse { if (it is QaydError) throw it else JSONObject() }
 
