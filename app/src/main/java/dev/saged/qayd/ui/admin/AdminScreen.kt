@@ -384,6 +384,7 @@ private fun CreateShopSheet(op: Op, onCreate: (NewShop) -> Unit, onDismiss: () -
     var suppliersOn by rememberSaveable { mutableStateOf(false) }
     var menuOn by rememberSaveable { mutableStateOf(false) }
     var layaway by rememberSaveable { mutableStateOf(false) }
+    var batteries by rememberSaveable { mutableStateOf(false) }
     var type by rememberSaveable { mutableStateOf(dev.saged.qayd.data.BizType.General.key) }
     var screens by rememberSaveable { mutableStateOf(3) }
     var tried by rememberSaveable { mutableStateOf(false) }
@@ -414,7 +415,7 @@ private fun CreateShopSheet(op: Op, onCreate: (NewShop) -> Unit, onDismiss: () -
                 type = t.key
                 debts = Module.Debts in t.modules; ps = Module.Ps in t.modules; power = Module.Electricity in t.modules
                 sms = Module.Sms in t.modules; inventory = Module.Inventory in t.modules; suppliersOn = Module.Suppliers in t.modules
-                menuOn = Module.Menu in t.modules; layaway = Module.Layaway in t.modules
+                menuOn = Module.Menu in t.modules; layaway = Module.Layaway in t.modules; batteries = Module.Batteries in t.modules
             }
             T("الوحدات", Modifier.padding(top = 6.dp), 14.sp, FontWeight.SemiBold)
             QSwitchRow(Module.Debts.label, debts, { debts = it })
@@ -422,6 +423,7 @@ private fun CreateShopSheet(op: Op, onCreate: (NewShop) -> Unit, onDismiss: () -
             QSwitchRow(Module.Suppliers.label, suppliersOn, { suppliersOn = it })
             QSwitchRow(Module.Menu.label, menuOn, { menuOn = it })
             QSwitchRow(Module.Layaway.label, layaway, { layaway = it })
+            QSwitchRow(Module.Batteries.label, batteries, { batteries = it })
             QSwitchRow(Module.Ps.label, ps, { ps = it })
             if (ps) QStepper("عدد الشاشات", screens, 1..12) { screens = it }
             QSwitchRow(Module.Electricity.label, power, { power = it })
@@ -442,6 +444,7 @@ private fun CreateShopSheet(op: Op, onCreate: (NewShop) -> Unit, onDismiss: () -
                                 if (suppliersOn) add(Module.Suppliers)
                                 if (menuOn) add(Module.Menu)
                                 if (layaway) add(Module.Layaway)
+                                if (batteries) add(Module.Batteries)
                             },
                             screens,
                             type,

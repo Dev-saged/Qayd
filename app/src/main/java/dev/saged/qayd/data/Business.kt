@@ -7,6 +7,7 @@ enum class BizType(val key: String, val label: String, val modules: Set<Module>,
     Clothing("clothing", "ملابس وأحذية", setOf(Module.Debts, Module.Inventory, Module.Suppliers, Module.Layaway, Module.Sms), listOf(20, 50, 100, 200)),
     Food("food", "مطعم، مشاوي، فلافل", setOf(Module.Debts, Module.Menu, Module.Suppliers, Module.Sms), listOf(5, 10, 15, 20)),
     Household("household", "أدوات منزلية", setOf(Module.Debts, Module.Inventory, Module.Suppliers, Module.Layaway, Module.Sms), listOf(10, 20, 50, 100)),
+    Batteries("batteries", "بطاريات سيارات", setOf(Module.Debts, Module.Inventory, Module.Suppliers, Module.Batteries, Module.Sms), listOf(50, 100, 200, 300)),
     Games("games", "صالة ألعاب وكهرباء", setOf(Module.Debts, Module.Ps, Module.Electricity, Module.Sms), listOf(5, 10, 20, 50));
 
     companion object {

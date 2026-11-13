@@ -4,7 +4,7 @@
 const SECURETOKEN_JWKS = 'https://www.googleapis.com/service_accounts/v1/jwk/securetoken@system.gserviceaccount.com';
 const SUFFIX_RE = /^[a-z0-9-]{2,30}\.[a-z]{2,10}$/;
 const USER_RE = /^[a-z0-9][a-z0-9._-]{1,31}$/;
-const MODULES = ['debts', 'ps', 'electricity', 'sms', 'inventory', 'suppliers', 'menu', 'layaway'];
+const MODULES = ['debts', 'ps', 'electricity', 'sms', 'inventory', 'suppliers', 'menu', 'layaway', 'batteries'];
 const TYPES = ['general', 'grocery', 'clothing', 'food', 'household', 'games'];
 const STAFF_PERMS = {
   quickSale: true, addDebt: true, addPayment: true, manageCustomers: true, deleteTx: false,
@@ -232,7 +232,7 @@ async function createStaff(env, caller, body) {
 
 /* ---------- النسخ الاحتياطية على الخادم وتنظيف القاعدة ---------- */
 const DATA = ['customers', 'tx', 'recurring', 'readings', 'templates', 'settings', 'ps', 'audit', 'products', 'moves',
-  'suppliers', 'stx', 'menu', 'orders', 'holds', 'usage', 'members'];
+  'suppliers', 'stx', 'menu', 'orders', 'holds', 'batteries', 'usage', 'members'];
 const KEEP_DAYS = 7;
 
 async function rawGet(env, url) {
@@ -286,7 +286,7 @@ async function cleanShop(env, shopId) {
   const writes = [
     ...old(await query('smsQueue', 'status', [{ stringValue: 'sent' }, { stringValue: 'delivered' }, { stringValue: 'failed' }]), 30, 'at'),
   ];
-  for (const c of ['tx', 'customers', 'products', 'menu', 'suppliers', 'stx', 'templates', 'recurring', 'holds']) {
+  for (const c of ['tx', 'customers', 'products', 'menu', 'suppliers', 'stx', 'templates', 'recurring', 'holds', 'batteries']) {
     writes.push(...old(await query(c, 'deleted', [{ booleanValue: true }]), 60));
   }
   for (let i = 0; i < writes.length; i += 450) await commit(env, writes.slice(i, i + 450));

@@ -106,6 +106,7 @@ fun MoreScreen(
             nav.voice?.let { ActionRow(QIcons.Mic, "صندوق الصوت", "تسجيلات بانتظار المراجعة والتأكيد", badge = nav.voiceCount.takeIf { n -> n > 0 }?.toString(), onClick = it) }
             nav.transfers?.let { ActionRow(QIcons.Wallet, "التحويلات", "تأكيد وصول المبالغ المحوّلة بالمحافظ والبنوك", badge = nav.pendingTransfers.takeIf { n -> n > 0 }?.toString(), onClick = it) }
             nav.cashClose?.let { ActionRow(QIcons.Receipt, "إغلاق الصندوق", "عدّ الدرج آخر اليوم ومطابقته مع نقد حركاتك", onClick = it) }
+            nav.batteries?.let { ActionRow(QIcons.Battery, "بطاريات السيارات", "الرقم التسلسلي والكفالة، الاستبدال، وخردة القديمة", onClick = it) }
             nav.holds?.let { ActionRow(QIcons.Calendar, "العربون والحجز", "زبون يحجز بعربون ويستلم عند الإكمال", onClick = it) }
             nav.stock?.let { ActionRow(QIcons.Box, "الأصناف والمخزون", "الأسعار والكميات، الباركود، وتنبيه النفاد", onClick = it) }
             nav.suppliers?.let { ActionRow(QIcons.Truck, "الموردون", "ما علينا لكل تاجر، فواتير الشراء والدفعات", onClick = it) }

@@ -186,6 +186,12 @@ service cloud.firestore {
           || can(shopId, 'deleteTx'));
       }
 
+      match /batteries/{id} {
+        allow read: if member(shopId);
+        allow create: if byMe() && can(shopId, 'quickSale') && featureOn(shopId, 'batteries');
+        allow update: if can(shopId, 'deleteTx') && onlyChanges(['deleted', 'updatedAt']);
+      }
+
       match /closes/{id} {
         allow read: if member(shopId);
         allow create: if byMe() && member(shopId);

@@ -122,6 +122,7 @@ private sealed interface Page {
     data object Suppliers : Page
     data object Orders : Page
     data object Holds : Page
+    data object Batteries : Page
     data object Transfers : Page
     data object CashClose : Page
     data object Voice : Page
@@ -142,6 +143,7 @@ class MoreNav(
     val lockedModules: List<String> = emptyList(),
     val orders: (() -> Unit)? = null,
     val holds: (() -> Unit)? = null,
+    val batteries: (() -> Unit)? = null,
     val transfers: (() -> Unit)? = null,
     val pendingTransfers: Int = 0,
     val cashClose: (() -> Unit)? = null,
@@ -275,6 +277,7 @@ fun QaydShell(
                         pad0, ledger, wallets, access.can(Perm.ConfirmTransfers), owner, actions.verifyTx, actions.saveWallets, onBack = { page = null },
                     )
                     Page.CashClose -> dev.saged.qayd.ui.money.CashClosePage(pad0, ledger, account.uid, closes, owner, actions.cashClose, onBack = { page = null })
+                    Page.Batteries -> dev.saged.qayd.ui.batteries.BatteriesPage(pad0, shop.id, stock.items, access.can(Perm.DeleteTx), onBack = { page = null })
                     Page.Holds -> dev.saged.qayd.ui.holds.HoldsPage(pad0, holds, stock.items, access.can(Perm.DeleteTx), holdActions, onBack = { page = null })
                     Page.Orders -> dev.saged.qayd.ui.orders.OrdersPage(
                         pad0, shop.name, menu, orders, access.can(Perm.ManageMenu), access.can(Perm.DeleteTx), orderActions, onBack = { page = null },
@@ -348,8 +351,9 @@ fun QaydShell(
                                 pendingTransfers = ledger.allTx.count { it.wallet != null && it.verify == "pending" },
                                 cashClose = { page = Page.CashClose }.takeIf { access.can(Perm.QuickSale) || access.can(Perm.AddPayment) },
                                 holds = { page = Page.Holds }.takeIf { Module.Layaway in shop.modules && access.can(Perm.QuickSale) },
+                                batteries = { page = Page.Batteries }.takeIf { Module.Batteries in shop.modules && access.can(Perm.QuickSale) },
                                 suppliers = { page = Page.Suppliers }.takeIf { Module.Suppliers in shop.modules },
-                                lockedModules = listOf(Module.Inventory, Module.Suppliers, Module.Menu, Module.Layaway).filter { it in full.modules && it !in shop.modules }.map { it.label },
+                                lockedModules = listOf(Module.Inventory, Module.Suppliers, Module.Menu, Module.Layaway, Module.Batteries).filter { it in full.modules && it !in shop.modules }.map { it.label },
                                 prices = { pricesOpen = true }.takeIf {
                                     access.can(Perm.SetPrices) && (Module.Ps in shop.modules || Module.Electricity in shop.modules)
                                 },

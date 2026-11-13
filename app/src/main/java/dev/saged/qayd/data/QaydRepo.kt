@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
@@ -794,6 +795,60 @@ class QaydRepo(context: Context) {
         ))
         move(shopId, p.id, MoveKind.Return, qty, p.cost, mapOf("txId" to tx.id), variant).let { (d, m) -> batch.set(d, m) }
         batch.commit()
+    }
+
+    /* ---------- بطاريات السيارات ---------- */
+
+    fun batteries(shopId: String): Flow<BatteryState> = listen<Any>("shops/$shopId/batteries") {
+        if (it.getString("kind") == "scrap") ScrapOut(it.id, it.getDouble("kg") ?: 0.0, it.getDouble("amount") ?: 0.0, it.millis("at"))
+        else BattSale(
+            it.id, it.getString("serial").orEmpty(), it.getString("model").orEmpty(), it.getString("name").orEmpty(), it.getString("phone").orEmpty(),
+            it.getString("car").orEmpty(), it.getDouble("price") ?: 0.0, it.getDouble("credit") ?: 0.0, it.getDouble("oldKg") ?: 0.0,
+            (it.getLong("months") ?: 12L).toInt(), it.millis("at"), it.getString("productId"), it.getString("txId"),
+        )
+    }.map { l -> BatteryState(l.filterIsInstance<BattSale>(), l.filterIsInstance<ScrapOut>()) }
+
+    /** بيع بطارية: سجل الكفالة وإيراد الصافي بعد قيمة القديمة، وخروج الصنف من المخزون إن اختير. */
+    fun sellBattery(shopId: String, n: NewBattery) {
+        val batch = db.batch()
+        val ref = db.collection("shops/$shopId/batteries").document()
+        val net = round2((n.price - n.credit).coerceAtLeast(0.0))
+        var txId: String? = null
+        if (net > 0) {
+            val tx = db.collection("shops/$shopId/tx").document().also { txId = it.id }
+            batch.set(tx, stamp() + mapOf(
+                "kind" to TxKind.Sale.key, "amount" to net, "at" to Timestamp(java.util.Date()),
+                "source" to "battery", "ref" to "بطارية ${n.model} ${n.serial}",
+            ))
+        }
+        batch.set(ref, stamp() + mapOf(
+            "kind" to "sale", "serial" to n.serial.trim(), "model" to n.model.trim(), "name" to n.name.trim(), "phone" to n.phone.trim(), "car" to n.car.trim(),
+            "price" to round2(n.price), "credit" to round2(n.credit), "oldKg" to round2(n.oldKg), "months" to n.months,
+            "at" to Timestamp(java.util.Date()), "productId" to n.productId, "txId" to txId,
+        ))
+        n.productId?.let { pid -> move(shopId, pid, MoveKind.Sale, -1.0, n.cost, mapOf("batteryId" to ref.id)).let { (d, m) -> batch.set(d, m) } }
+        batch.commit()
+    }
+
+    fun sellScrap(shopId: String, kg: Double, amount: Double) {
+        val batch = db.batch()
+        batch.set(db.collection("shops/$shopId/batteries").document(), stamp() + mapOf(
+            "kind" to "scrap", "kg" to round2(kg), "amount" to round2(amount), "at" to Timestamp(java.util.Date()),
+        ))
+        if (amount > 0) batch.set(db.collection("shops/$shopId/tx").document(), stamp() + mapOf(
+            "kind" to TxKind.Sale.key, "amount" to round2(amount), "at" to Timestamp(java.util.Date()), "source" to "scrap", "ref" to "بيع خردة بطاريات ${round2(kg)} كغ",
+        ))
+        batch.commit()
+    }
+
+    /** حذف بيع بطارية: يلغى إيراده ويعود الصنف للمخزون. */
+    fun deleteBattery(shopId: String, s: BattSale, cost: Double) {
+        val batch = db.batch()
+        batch.update(db.document("shops/$shopId/batteries/${s.id}"), mapOf("deleted" to true, "updatedAt" to FieldValue.serverTimestamp()))
+        s.txId?.let { batch.update(db.document("shops/$shopId/tx/$it"), mapOf("deleted" to true, "updatedAt" to FieldValue.serverTimestamp())) }
+        s.productId?.let { pid -> move(shopId, pid, MoveKind.Return, 1.0, cost, mapOf("batteryId" to s.id)).let { (d, m) -> batch.set(d, m) } }
+        batch.commit()
+        log(shopId, "حذف بيع بطارية", "${s.model} · ${s.serial}", s.net)
     }
 
     /* ---------- العربون والحجز ---------- */

@@ -50,6 +50,7 @@ object QIcons {
     )
     val Heart = solid("heart", "M12 20.5S3.5 15.6 3.5 9.6A4.6 4.6 0 0 1 12 7a4.6 4.6 0 0 1 8.5 2.6c0 6-8.5 10.9-8.5 10.9z")
     val Scan = icon("scan", "M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3" to W, "M8 8v8M11 8v8M14 8v8M17 8v8" to 1.4f)
+    val Battery = icon("battery", "M3 8h16a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1zM6 5h3v3H6zM15 5h3v3h-3zM6.5 13h4M8.5 11v4M14 13h4" to W)
     val Box = icon("box", "M12 3l8 4.5v9L12 21l-8-4.5v-9zM4 7.5l8 4.5 8-4.5M12 12v9" to W)
     val Truck = icon("truck", "M3 6h11v10H3zM14 9.5h4l3 3.5v3h-7" to W, "M8.5 18a1.8 1.8 0 1 1-3.6 0a1.8 1.8 0 1 1 3.6 0M18.5 18a1.8 1.8 0 1 1-3.6 0a1.8 1.8 0 1 1 3.6 0" to W)
     val Printer = icon("printer", "M7 8V3h10v5M7 17H5a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M7 14h10v7H7z" to W)

@@ -1,6 +1,6 @@
 # repo-map — قيد
 
-> v1.14.0 | أول ما تفتح: هذا الملف ثم `.claude/session-handoff.md`. لا تقرأ ملفاً كبيراً كاملاً: استخدم Grep على الاسم من "Quick index" ثم Read بنطاق أسطر.
+> v1.15.0 | أول ما تفتح: هذا الملف ثم `.claude/session-handoff.md`. لا تقرأ ملفاً كبيراً كاملاً: استخدم Grep على الاسم من "Quick index" ثم Read بنطاق أسطر.
 > الأكبر حجماً (لا تقرأه كاملاً): QaydRepo 1005، AdminScreen 677، QaydShell 632، MessagesScreen 499، AppRoot 478، OrdersPage 432، HomeScreen 421.
 
 ## Quick index (ميزة → ملف → ابحث بـ)
@@ -14,6 +14,7 @@
 - تذكير شهري وجوال الإرسال المعتمد → `notify/SmsSchedule.kt`, `QaydRepo` (`requestGateway`, `answerGatewayRequest`), `settings/sms.gatewayDevice`
 - رابط كشف الحساب → `Sms.kt` (`StatementLinks`), `QaydRepo.ensureLink`, Worker `GET /s/{token}`
 - صوت → `voice/VoiceParse.kt` (تحليل محلي), `voice/VoiceInbox.kt` (تسجيل + تعرّف + صندوق), `ui/voice/VoiceUi.kt`
+- بطاريات السيارات → `data/Batteries.kt` (BattSale, ScrapOut, BatteryState), `QaydRepo` (`batteries`, `sellBattery`, `sellScrap`, `deleteBattery`), `ui/batteries/BatteriesPage.kt`, Module.Batteries + BizType.Batteries, rules `batteries`
 - مخزون/مورّدون/طلبات/محجوزات/قائمة → `data/Stock|Suppliers|Orders|Holds.kt` + `ui/stock|suppliers|orders|holds/*`, طابعة `system/BtPrinter.kt`
 - بلايستيشن/كهرباء/مصاريف → `ui/ps`, `data/Power.kt`+`ui/power`, `ui/expenses`, تنبيهات `notify/PsAlarms.kt`
 - لوحة المالك (محلات، باقات، مدفوعات، نسخ الخادم، حذف، ربط مالك) → `ui/admin/AdminScreen.kt`, `data/Platform.kt`, `QaydRepo` (`wipeShop`, `deleteShop`, `restoreServerBackup`, `linkOwner`)
@@ -75,6 +76,7 @@
 - CI publishes a Release per main build: tag vX.Y.Z-bN, notes = docs/releases/vX.Y.Z.md + commits since previous tag.
 
 ## Changes
+- v1.15.0: Module.Batteries/BizType.Batteries, shops/{id}/batteries (kind sale|scrap; warranty end derived from at+months; scrap kg derived), sale writes sale tx net of trade-in credit + stock move, rules batteries, Worker MODULES/backup/cleanup include batteries.
 - v1.14.0: Worker resetPassword (super: any account; owner: staff of own shops; validSince revokes sessions), ResetPasswordPanel (suggested password, copy/share) in team PermsSheet + admin EditShopSheet.
 - v1.13.0: AccountVault (named FirebaseApp per email, unlimited persistent cache, offline password check), QaydRepo auth/db/prefs follow active account, signOut keeps session, forget removes it, warm() prefetches all shop collections; services use QaydRepo.firestore.
 - v0.1.0: shell + home (direction A), icon, CI, per-build releases.
