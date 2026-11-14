@@ -3,6 +3,7 @@ package dev.saged.qayd.ui.admin
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -294,8 +295,8 @@ private fun EditShopSheet(
             QButton("تسجيل دفعة وتمديد الاشتراك", { paying = true }, secondary = true)
             QButton("عرض المحل للدعم (قراءة فقط)", onSupport, secondary = true)
             QButton("النسخ الاحتياطية على الخادم", { backupsOpen = true }, secondary = true)
-            LinkOwnerBox(s, server)
             ResetByLoginBox(s)
+            LinkOwnerBox(s, server)
             Column(
                 Modifier.padding(top = 8.dp).fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(p.danger.copy(alpha = .08f))
                     .border(1.dp, p.danger.copy(alpha = .35f), RoundedCornerShape(18.dp)).padding(14.dp),
@@ -691,7 +692,18 @@ private fun ResetByLoginBox(s: Shop) {
             .border(1.dp, p.line, RoundedCornerShape(18.dp)).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        QField(login, { login = it.trim().lowercase() }, "حساب المطلوب تغيير كلمة سره", hint = "ahmad@${s.suffix}", ltr = true)
+        T("كلمات سر الحسابات", size = 14.sp, weight = FontWeight.SemiBold)
+        T("اختر حساباً من حسابات هذا المحل أو اكتب اسم دخوله، ثم عيّن له كلمة سر جديدة.", size = 12.sp, color = p.mute, maxLines = 2)
+        val members by remember(s.id) { repo.members(s.id) }.collectAsStateWithLifecycle(emptyList())
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            members.forEach { m ->
+                val on = login == m.username.lowercase()
+                T(m.displayName.ifBlank { m.username }, Modifier.clip(RoundedCornerShape(10.dp))
+                    .background(if (on) p.pri.copy(alpha = .18f) else p.surface).clickable { login = m.username.lowercase() }
+                    .padding(horizontal = 12.dp, vertical = 8.dp), 12.5.sp, if (on) FontWeight.SemiBold else FontWeight.Normal, if (on) p.pri else p.ink)
+            }
+        }
+        QField(login, { login = it.trim().lowercase() }, "اسم الدخول الكامل", hint = "ahmad@${s.suffix}", ltr = true)
         if (login.isNotBlank()) dev.saged.qayd.ui.team.ResetPasswordPanel(login, login) { repo.resetPassword(login, it, false) }
     }
 }

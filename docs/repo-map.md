@@ -1,6 +1,6 @@
 # repo-map — قيد
 
-> v1.15.0 | أول ما تفتح: هذا الملف ثم `.claude/session-handoff.md`. لا تقرأ ملفاً كبيراً كاملاً: استخدم Grep على الاسم من "Quick index" ثم Read بنطاق أسطر.
+> v1.15.1 | أول ما تفتح: هذا الملف ثم `.claude/session-handoff.md`. لا تقرأ ملفاً كبيراً كاملاً: استخدم Grep على الاسم من "Quick index" ثم Read بنطاق أسطر.
 > الأكبر حجماً (لا تقرأه كاملاً): QaydRepo 1005، AdminScreen 677، QaydShell 632، MessagesScreen 499، AppRoot 478، OrdersPage 432، HomeScreen 421.
 
 > فهرس التصريحات: `Grep "<symbol>" docs/code-index.md` (يعطي الملف والسطر). يُجدَّد بـ `python3 tools/gen-code-index.py` قبل كل commit.
@@ -78,6 +78,7 @@
 - CI publishes a Release per main build: tag vX.Y.Z-bN, notes = docs/releases/vX.Y.Z.md + commits since previous tag.
 
 ## Changes
+- v1.15.1: ResetByLoginBox titled, shows shop members as chips, placed above LinkOwnerBox in EditShopSheet.
 - v1.15.0+: BattSale.cost/profit + monthProfit card; tools/gen-code-index.py → docs/code-index.md.
 - v1.15.0: Module.Batteries/BizType.Batteries, shops/{id}/batteries (kind sale|scrap; warranty end derived from at+months; scrap kg derived), sale writes sale tx net of trade-in credit + stock move, rules batteries, Worker MODULES/backup/cleanup include batteries.
 - v1.14.0: Worker resetPassword (super: any account; owner: staff of own shops; validSince revokes sessions), ResetPasswordPanel (suggested password, copy/share) in team PermsSheet + admin EditShopSheet.
