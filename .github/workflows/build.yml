@@ -115,8 +115,11 @@ jobs:
 
       - name: Publish in-app update
         if: github.ref_name == 'main' && steps.sign.outputs.signed == 'true'
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -a; . secrets/backend.env; set +a
+          if [ -n "$CF_TOKEN" ]; then export CLOUDFLARE_API_TOKEN="$CF_TOKEN"; fi
           VERSION=$(grep '^VERSION_NAME=' gradle.properties | cut -d= -f2)
           BASE=$(grep '^VERSION_CODE=' gradle.properties | cut -d= -f2)
           CODE=$((BASE + GITHUB_RUN_NUMBER))
